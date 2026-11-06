@@ -131,8 +131,12 @@
 			{/if}
 		</section>
 
-		<div class="actions">
+		<div class="actions row">
 			<button class="btn big" type="submit" disabled={selected.length === 0}>Enregistrer</button>
+			{#if q?.day}
+				<!-- Avant l'ouverture, la page joueur passe en aperçu pour un admin : réponse testée, jamais enregistrée. -->
+				<a class="btn secondary" href="/jour/{q.day}">Tester en aperçu</a>
+			{/if}
 		</div>
 	</form>
 

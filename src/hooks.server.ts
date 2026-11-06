@@ -1,6 +1,7 @@
 import { error, redirect, type Handle } from '@sveltejs/kit';
 import { SESSION_COOKIE, deleteSessionCookie, setSessionCookie, validateSession } from '$lib/server/auth/session';
 import { isAdmin } from '$lib/server/config';
+import { invalidateQuestions } from '$lib/server/play';
 
 // Pages accessibles sans session. Les fichiers de static/ (polices, favicon) sont servis avant ce hook.
 const PUBLIC = ['/login', '/auth/', '/healthz', '/img/logo'];
@@ -31,5 +32,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Garde unique pour tout /admin : aucune page admin n'a à revérifier.
 	if (path.startsWith('/admin') && !event.locals.isAdmin) error(403, 'Réservé aux admins');
 
-	return resolve(event);
+	const response = await resolve(event);
+	// Toute écriture admin (question, liste, valeurs) peut changer une question servie aux joueurs :
+	// on vide son cache. Plus simple et plus sûr qu'un appel dans chaque action.
+	if (path.startsWith('/admin') && event.request.method === 'POST') invalidateQuestions();
+	return response;
 };
