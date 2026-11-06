@@ -1,6 +1,7 @@
-# Build « binaire » : le contenu est envoyé depuis le poste (ou la CI) au lancement, sans que le
-# cluster ait à lire le dépôt GitHub (privé). Envoie exactement le dernier commit :
-#   oc start-build jingle-quest --from-repo=. --follow
+# Construit l'image depuis le miroir GitLab innersource du dépôt GitHub. La CI remplace
+# CHANGEME-git-uri par $GIT_SOURCE_URI et lance `oc start-build --commit=<sha>`.
+# Miroir lisible sans authentification : pas de sourceSecret (à ajouter si le dépôt devient privé).
+# Dépannage depuis un poste : oc start-build jingle-quest --from-repo=. --follow
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
@@ -8,7 +9,10 @@ metadata:
   labels: { app: jingle-quest }
 spec:
   source:
-    type: Binary
+    type: Git
+    git:
+      uri: CHANGEME-git-uri
+      ref: main
   strategy:
     type: Docker
     dockerStrategy:

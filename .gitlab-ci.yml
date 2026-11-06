@@ -1,0 +1,68 @@
+# Pipeline du miroir GitLab innersource (le dépôt principal est sur GitHub) : vérifications sur
+# chaque push, puis déploiement OpenShift automatique sur main. Inspiré de rae.
+#
+# Variables CI/CD (Settings > CI/CD > Variables) :
+#   OPENSHIFT_SERVER     URL de l'API du cluster (https://api.ocp4.innershift.sodigital.io:6443)
+#   OPENSHIFT_TOKEN      token d'un ServiceAccount avec le rôle edit sur le namespace (masqué, protégé)
+#   GIT_SOURCE_URI       URL Git clonée par le BuildConfig (ce miroir)
+#   OPENSHIFT_NAMESPACE  (optionnel, défaut jingle)
+#   FORCE_DEPLOY         (optionnel) mettre 1 pour passer outre le gel des déploiements de 8h45 à 10h
+
+stages:
+  - test
+  - deploy
+
+.npm_cache: &npm_cache
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm/
+
+.node:
+  stage: test
+  image: node:22-alpine
+  cache:
+    <<: *npm_cache
+  before_script:
+    - npm ci --cache .npm --prefer-offline
+
+test:unit:
+  extends: .node
+  # Les tests sont purs (pas de base) : DATABASE_URL n'est lue par aucun d'eux mais doit exister.
+  variables:
+    DATABASE_URL: postgres://ci:ci@localhost:5432/ci
+  script:
+    - npm test
+
+check:types:
+  extends: .node
+  script:
+    - npm run check
+
+# Bloquant seulement sur les failles hautes/critiques des dépendances embarquées dans l'image.
+audit:
+  extends: .node
+  script:
+    - npm audit --omit=dev --audit-level=high
+
+deploy:
+  stage: deploy
+  image: quay.io/openshift/origin-cli:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+  script:
+    # Gel pendant l'ouverture des cases (1 seul pod en Recreate = quelques secondes de coupure).
+    - |
+      H=$(TZ=Europe/Paris date +%H%M); M=$(TZ=Europe/Paris date +%m)
+      if [ "$M" = "12" ] && [ "$H" -ge 0845 ] && [ "$H" -lt 1000 ] && [ "${FORCE_DEPLOY:-}" != "1" ]; then
+        echo "Gel des déploiements de 8h45 à 10h en décembre (FORCE_DEPLOY=1 pour forcer)."; exit 1
+      fi
+    - oc login --token="$OPENSHIFT_TOKEN" --server="$OPENSHIFT_SERVER"
+    - oc project "${OPENSHIFT_NAMESPACE:-jingle}"
+    # Jamais secret.yaml / db-secret.yaml : les vraies valeurs ne vivent que sur le cluster.
+    - sed "s#CHANGEME-git-uri#${GIT_SOURCE_URI}#" openshift/buildconfig.yaml | oc apply -f -
+    - oc apply -f openshift/imagestream.yaml -f openshift/configmap.yaml -f openshift/deployment.yaml
+      -f openshift/service.yaml -f openshift/route.yaml -f openshift/db-statefulset.yaml
+    - oc start-build jingle-quest --commit="$CI_COMMIT_SHA" --follow
+    - oc rollout status deployment/jingle-quest --timeout=5m

@@ -1,4 +1,6 @@
-# Configuration non sensible. Liste complète et description : .env.example à la racine.
+# Configuration non sensible et identique d'un déploiement à l'autre (réappliquée par la CI).
+# Ce qui est propre à l'entreprise (ADMIN_EMAILS, ALLOWED_EMAIL_DOMAINS) vit dans le secret
+# jingle-quest-secrets, que la CI ne touche jamais : voir secrets.sh.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -7,7 +9,3 @@ metadata:
 data:
   # Même host que route.yaml. Redirect URI à déclarer chez l'IdP : <ORIGIN>/auth/callback
   ORIGIN: 'https://jingle-quest.apps.ocp4.innershift.sodigital.io'
-  # Vide = tout compte que l'IdP authentifie. Ex. 'monentreprise.com,filiale.com'
-  ALLOWED_EMAIL_DOMAINS: ''
-  ADMIN_EMAILS: 'CHANGEME@exemple.com'
-  VAPID_SUBJECT: 'mailto:CHANGEME@exemple.com'
