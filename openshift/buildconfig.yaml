@@ -1,4 +1,6 @@
-# Construit l'image dans OpenShift à partir du Dockerfile du dépôt (oc start-build jingle-quest).
+# Build « binaire » : le contenu est envoyé depuis le poste (ou la CI) au lancement, sans que le
+# cluster ait à lire le dépôt GitHub (privé). Envoie exactement le dernier commit :
+#   oc start-build jingle-quest --from-repo=. --follow
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
@@ -6,14 +8,7 @@ metadata:
   labels: { app: jingle-quest }
 spec:
   source:
-    type: Git
-    git:
-      uri: https://github.com/FabienBounoir/jingle-quest.git
-      ref: main
-    # Dépôt privé : secret basic-auth avec un token GitHub en lecture seule (voir README.md).
-    # À retirer si le dépôt devient public.
-    sourceSecret:
-      name: jingle-quest-git
+    type: Binary
   strategy:
     type: Docker
     dockerStrategy:
@@ -27,5 +22,3 @@ spec:
     to:
       kind: ImageStreamTag
       name: jingle-quest:latest
-  triggers:
-    - type: ConfigChange

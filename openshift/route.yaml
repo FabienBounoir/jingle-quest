@@ -1,4 +1,4 @@
-# Pas de spec.host : OpenShift génère un sous-domaine. Reporter ce host dans ORIGIN (configmap.yaml).
+# Host fixé (sinon OpenShift génère <route>-<namespace>.apps…). Doit être identique à ORIGIN (configmap.yaml).
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
@@ -9,6 +9,7 @@ metadata:
     # Un heartbeat part toutes les 25 s côté serveur (SPECS §7.4).
     haproxy.router.openshift.io/timeout: 1h
 spec:
+  host: jingle-quest.apps.ocp4.innershift.sodigital.io
   to:
     kind: Service
     name: jingle-quest

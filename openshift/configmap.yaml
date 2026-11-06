@@ -5,8 +5,8 @@ metadata:
   name: jingle-quest-config
   labels: { app: jingle-quest }
 data:
-  # Host de la Route une fois créée (oc get route jingle-quest -o jsonpath='{.spec.host}').
-  ORIGIN: 'https://CHANGEME-route-host'
+  # Même host que route.yaml. Redirect URI à déclarer chez l'IdP : <ORIGIN>/auth/callback
+  ORIGIN: 'https://jingle-quest.apps.ocp4.innershift.sodigital.io'
   # Vide = tout compte que l'IdP authentifie. Ex. 'monentreprise.com,filiale.com'
   ALLOWED_EMAIL_DOMAINS: ''
   ADMIN_EMAILS: 'CHANGEME@exemple.com'
