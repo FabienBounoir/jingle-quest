@@ -25,7 +25,7 @@
 					<button type="button" class="swatch" style:background={p} aria-label="Couleur {p}" aria-pressed={color.toLowerCase() === p.toLowerCase()} onclick={() => (color = p)}></button>
 				{/each}
 				<input type="color" bind:value={color} aria-label="Couleur personnalisée" />
-				<input type="text" name="bgColor" bind:value={color} pattern="#[0-9a-fA-F]{6}" style="max-width: 130px" aria-label="Code couleur" />
+				<input type="text" name="bgColor" bind:value={color} pattern={"#[0-9a-fA-F]{6}"} style="max-width: 130px" aria-label="Code couleur" />
 				<span class="preview" style:background-color={color} aria-hidden="true"><span class="title-on-bg">Aperçu</span></span>
 			</div>
 		</div>
