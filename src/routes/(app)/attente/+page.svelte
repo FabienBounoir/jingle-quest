@@ -3,6 +3,7 @@
 	import { countdown, serverClock } from '$lib/clock.svelte';
 	import { dayLabel, dayShort } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
+	import PushButton from '$lib/components/PushButton.svelte';
 	let { data } = $props();
 	// La présence me compte aussi : « attendent avec toi » = les autres.
 	const others = $derived(live.presence ? Math.max(0, live.presence.waiting - 1) : null);
@@ -48,6 +49,8 @@
 	{/if}
 
 	<p class="hint">Reste sur cette page : la quête s'affiche toute seule à l'ouverture. Les premiers décrochent le plus gros bonus !</p>
+
+	<PushButton vapidKey={data.pushKey} />
 
 	{#if data.catchUp.length}
 		<div class="card catch">

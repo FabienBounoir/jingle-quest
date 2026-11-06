@@ -4,6 +4,8 @@
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { answers, days, db, users } from '$lib/server/db';
 import { rankBoard, type BoardEntry, type Ranked } from './game';
+import { sendToAll } from './push';
+import { getSettings } from './settings';
 
 export type View = 'calendar' | 'question' | 'waiting' | 'board';
 type Client = { userId: string; view: View; send: (chunk: string) => boolean };
@@ -79,6 +81,14 @@ async function loadBoard() {
 		.groupBy(answers.questionId);
 	state.answered = new Map(counts.map((c) => [c.q, c.n]));
 	state.dirtyBoard = true;
+}
+
+/** Recharge tout depuis la base (après une remise à zéro des réponses ou un import). */
+export async function reloadLive() {
+	if (!ready) return;
+	await loadSchedule();
+	await loadBoard();
+	state.dirtyAnswered = true;
 }
 
 /** À appeler quand l'admin modifie le calendrier (heures, exclusions, quêtes rattachées). */
@@ -182,6 +192,21 @@ function broadcast(build: (c: Client) => string | null) {
 
 // ---------- Boucle ----------
 
+/** Notification push d'ouverture, sans bloquer la boucle (l'envoi à 2 000 abonnés prend quelques secondes). */
+function notifyOpening(date: string) {
+	getSettings()
+		.then((s) =>
+			sendToAll({
+				title: s.eventName,
+				body: 'Une nouvelle case est ouverte ! Les premiers décrochent le bonus de rapidité.',
+				url: `/jour/${date}`,
+				tag: 'jq-open'
+			})
+		)
+		.then((r) => r.sent + r.failed > 0 && console.log('push_open', date, r))
+		.catch((e) => console.error('push_open_failed', e));
+}
+
 async function openDueDays(now: number) {
 	for (const d of state.schedule) {
 		if (d.notified || d.opensAt > now) continue;
@@ -204,6 +229,7 @@ async function openDueDays(now: number) {
 		}
 		state.dirtyAnswered = true;
 		broadcast(() => sse('open', { date: d.date }));
+		if (d.questionId) notifyOpening(d.date);
 	}
 }
 

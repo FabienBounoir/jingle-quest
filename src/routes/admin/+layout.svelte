@@ -5,7 +5,9 @@
 		{ href: '/admin', label: 'Calendrier' },
 		{ href: '/admin/questions', label: 'Questions' },
 		{ href: '/admin/listes', label: 'Listes de réponses' },
-		{ href: '/admin/reglages', label: 'Réglages' }
+		{ href: '/admin/reglages', label: 'Réglages' },
+		{ href: '/admin/stats', label: 'Statistiques' },
+		{ href: '/admin/donnees', label: 'Données' }
 	];
 	const current = (href: string) =>
 		href === '/admin' ? page.url.pathname === '/admin' : page.url.pathname.startsWith(href);

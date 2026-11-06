@@ -19,6 +19,7 @@
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
 		"@types/node": "^26.0.1",
+		"@types/web-push": "^3.6.4",
 		"drizzle-kit": "^0.31.5",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
@@ -28,6 +29,7 @@
 	},
 	"dependencies": {
 		"drizzle-orm": "^0.45.2",
-		"postgres": "^3.4.7"
+		"postgres": "^3.4.7",
+		"web-push": "^3.6.7"
 	}
 }

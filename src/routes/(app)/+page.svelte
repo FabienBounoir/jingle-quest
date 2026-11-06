@@ -3,6 +3,7 @@
 	import { countdown, serverClock } from '$lib/clock.svelte';
 	import { dayLabel } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
+	import PushButton from '$lib/components/PushButton.svelte';
 	let { data } = $props();
 
 	// Valeurs temps réel quand le flux est là, valeurs du rendu serveur sinon.
@@ -114,6 +115,8 @@
 		</aside>
 	</div>
 
+	{#if !data.ended}<div class="push-wrap"><PushButton vapidKey={data.pushKey} /></div>{/if}
+
 	<form method="POST" action="/logout" class="logout">
 		<button type="submit" class="hand">se déconnecter</button>
 	</form>
@@ -175,6 +178,7 @@
 	li strong, .mine strong { font-family: var(--font-title); }
 	.dots { margin: 0; text-align: center; }
 	.all { text-align: center; }
+	.push-wrap { max-width: 560px; width: 100%; margin: 0 auto; }
 	.logout { text-align: center; }
 	.logout button { background: none; border: 0; color: var(--white); text-decoration: underline; cursor: pointer; min-height: 44px; }
 

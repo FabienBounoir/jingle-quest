@@ -308,7 +308,7 @@ Ponytail : une boucle à 1 s plutôt qu'un `setTimeout` calé sur l'heure d'ouve
 
 | Route | Rôle |
 |---|---|
-| `POST /api/answer` | Envoi d'une réponse |
+| `POST /jour/[date]?/answer` | Envoi d'une réponse (form action : protection CSRF de SvelteKit, marche aussi sans JS) |
 | `GET /api/events` | Flux SSE |
 | `POST`/`DELETE /api/push` | Abonnement aux notifications push |
 | `GET /healthz` | Sonde OpenShift |
@@ -322,7 +322,7 @@ Ponytail : une boucle à 1 s plutôt qu'un `setTimeout` calé sur l'heure d'ouve
 | `/admin/listes`, `/admin/listes/[id]` | CRUD des listes et import CSV |
 | `/admin/reglages` | Calendrier, barème, marque, bouton « Générer le calendrier » |
 | `/admin/stats` | Statistiques |
-| `/admin/transfert` | `GET` export JSON, action d'import |
+| `/admin/donnees` | Export et import JSON du template, remise à zéro des réponses |
 
 **Aperçu admin** : sur `/jour/[date]`, un admin peut ouvrir la case avant l'heure. Sa réponse est validée, mais elle **n'est pas enregistrée** (`dryRun`).
 

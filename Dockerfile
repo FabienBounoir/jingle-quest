@@ -12,6 +12,9 @@ RUN npm run build && npm prune --omit=dev
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000
+# adapter-node refuse par défaut les requêtes de plus de 512 Ko : trop peu pour une image de question
+# (2 Mo) ou l'import d'un template avec ses images (une vingtaine × 2 Mo, en base64).
+ENV BODY_SIZE_LIMIT=64M
 COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./package.json
