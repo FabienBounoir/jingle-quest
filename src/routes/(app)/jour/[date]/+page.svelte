@@ -3,7 +3,9 @@
 	import Combobox from '$lib/components/Combobox.svelte';
 	import { serverClock } from '$lib/clock.svelte';
 	import { dayLabel } from '$lib/dates';
+	import { live } from '$lib/live.svelte';
 	let { data, form } = $props();
+	const answered = $derived(live.answered?.questionId === data.question.id ? live.answered.count : data.answered);
 
 	let value = $state<number | null>(null);
 	let sending = $state(false);
@@ -27,7 +29,7 @@
 			<h1 class="title-on-bg">Quête n° {data.number}</h1>
 			<p class="hand sub">{dayLabel(data.date)} · une seule chance !</p>
 		</div>
-		<span class="pill answered"><span class="dot"></span><strong>{data.answered}</strong> ont répondu</span>
+		<span class="pill answered"><span class="dot"></span><strong>{answered}</strong> ont répondu</span>
 	</header>
 
 	{#if data.preview}

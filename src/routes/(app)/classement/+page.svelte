@@ -1,14 +1,42 @@
 <script lang="ts">
+	import { flip } from 'svelte/animate';
 	import { dayLabel } from '$lib/dates';
+	import { live } from '$lib/live.svelte';
 	let { data } = $props();
-	const podium = $derived(data.rows.slice(0, 3));
-	const rest = $derived(data.rows.slice(3));
+
+	// Vue générale : le flux SSE remplace les lignes à chaque changement ; « aujourd'hui » reste statique.
+	const rows = $derived(
+		(data.view === 'general' && live.top
+			? live.top.map((t) => ({ userId: t.userId, rank: t.rank, name: t.name, points: t.points, detail: `${t.ok}/${t.answered} justes`, delta: t.delta }))
+			: data.rows
+		).map((r) => ({ ...r, me: r.userId === data.userId }))
+	);
+	const mine = $derived.by(() => {
+		if (data.view !== 'general') return null;
+		const m = live.me;
+		if (m === undefined) return data.mine ? { ...data.mine, me: true } : null;
+		return m && m.rank > rows.length ? { userId: data.userId, rank: m.rank, name: 'Toi', points: m.points, detail: `${m.ok}/${m.answered} justes`, delta: null, me: true } : null;
+	});
+	const podium = $derived(rows.slice(0, 3));
+	const rest = $derived(rows.slice(3));
 	const COLORS = ['#1F8A55', '#2D4B9A', '#6B3FA0'];
 	const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 	const short = (n: string) => n.split(/\s+/)[0];
 	// Ordre visuel du podium : 2e, 1er, 3e.
 	const order = [1, 0, 2];
 </script>
+
+{#snippet delta(d: number | null)}
+	{#if d !== null && d !== 0}
+		<span class="delta {d > 0 ? 'up' : 'down'}" aria-label="{d > 0 ? 'gagne' : 'perd'} {Math.abs(d)} place{Math.abs(d) > 1 ? 's' : ''} depuis la dernière case">
+			<svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
+				{#if d > 0}<path d="M12 19V5M5 12l7-7 7 7" />{:else}<path d="M12 5v14M5 12l7 7 7-7" />{/if}
+			</svg>{Math.abs(d)}
+		</span>
+	{:else if d === 0}
+		<span class="delta same" aria-label="même place">=</span>
+	{/if}
+{/snippet}
 
 <div class="board">
 	<div class="top row">
@@ -24,7 +52,7 @@
 		</nav>
 	</div>
 
-	{#if data.rows.length === 0}
+	{#if rows.length === 0}
 		<div class="card"><p class="hand">personne n'a encore répondu… sois le premier !</p></div>
 	{:else}
 		<section class="podium" aria-label="Podium">
@@ -40,21 +68,23 @@
 			{/each}
 		</section>
 
-		{#if rest.length || data.mine}
+		{#if rest.length || mine}
 			<ol class="card list" start="4">
-				{#each rest as r (r.rank)}
-					<li class:me={r.me}>
+				{#each rest as r (r.userId)}
+					<li class:me={r.me} animate:flip={{ duration: 400 }}>
 						<span class="rk">{r.rank}</span>
 						<span class="nm"><strong>{r.name}{r.me ? ' (toi)' : ''}</strong><small>{r.detail}</small></span>
+						{@render delta(r.delta)}
 						<span class="pts">{r.points}</span>
 					</li>
 				{/each}
-				{#if data.mine}
+				{#if mine}
 					<li class="sep hand" aria-hidden="true">· · ·</li>
 					<li class="me">
-						<span class="rk">{data.mine.rank}</span>
-						<span class="nm"><strong>{data.mine.name} (toi)</strong><small>{data.mine.detail}</small></span>
-						<span class="pts">{data.mine.points}</span>
+						<span class="rk">{mine.rank}</span>
+						<span class="nm"><strong>{mine.name} (toi)</strong><small>{mine.detail}</small></span>
+						{@render delta(mine.delta)}
+						<span class="pts">{mine.points}</span>
 					</li>
 				{/if}
 			</ol>
@@ -94,6 +124,10 @@
 	.nm strong { font: 600 18px var(--font-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.nm small { font-size: 13px; }
 	.pts { font: 700 22px var(--font-title); font-variant-numeric: tabular-nums; }
+	.delta { display: inline-flex; align-items: center; gap: 2px; padding: 2px 8px; border: 2.5px solid var(--ink); border-radius: 8px; font-size: 14px; }
+	.delta.up { background: var(--green); }
+	.delta.down { background: #ffb3a8; }
+	.delta.same { border: 0; font: 400 20px var(--font-hand); }
 
 	@media (max-width: 500px) {
 		.tabs { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }

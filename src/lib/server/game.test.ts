@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fold } from '$lib/text';
-import { bonusAt, cellState, eventEnd, isSameDay, points } from './game';
+import { bonusAt, cellState, eventEnd, isSameDay, points, rankBoard } from './game';
 
 const s = { pointsCorrect: 100, pointsCatchup: 50, bonusMax: 50, bonusMinutes: 60 };
 const min = 60_000;
@@ -49,5 +49,25 @@ describe('cellState', () => {
 describe('fold', () => {
 	it('ignore accents et casse', () => {
 		expect(fold('  Inès LEFÈVRE ')).toBe('ines lefevre');
+	});
+});
+
+describe('rankBoard', () => {
+	const e = (userId: string, points: number, elapsed: number, latestPoints = 0, latestAnswered = false, answered = 2) => ({
+		userId, name: userId, points, ok: 0, answered, elapsed, latestPoints, latestAnswered
+	});
+	it('classe par points puis par temps cumulé, et calcule l’évolution depuis la veille', () => {
+		const r = rankBoard([
+			e('a', 300, 100, 0, true), // a a raté la dernière case : 300 avant comme après
+			e('b', 290, 50, 150, true), // b : 140 avant
+			e('c', 300, 90, 150, true), // c : 150 avant ; à égalité avec a mais plus rapide
+			e('d', 140, 10, 140, true, 1) // nouveau joueur : aucune réponse avant la dernière case
+		]);
+		expect(r.map((x) => [x.userId, x.rank, x.delta])).toEqual([
+			['c', 1, 1], // avant : a 300, b 140, c 150 → c était 2e
+			['a', 2, -1],
+			['b', 3, 0],
+			['d', 4, null]
+		]);
 	});
 });

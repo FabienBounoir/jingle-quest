@@ -1,6 +1,28 @@
 <script lang="ts">
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
+	import { connectLive, live, type View } from '$lib/live.svelte';
 	let { data, children } = $props();
+
+	const view = $derived<View>(
+		page.url.pathname.startsWith('/attente') ? 'waiting'
+		: page.url.pathname.startsWith('/jour/') ? 'question'
+		: page.url.pathname.startsWith('/classement') ? 'board'
+		: 'calendar'
+	);
+	// Une connexion par onglet, rouverte quand on change de page (la présence et le top en dépendent).
+	$effect(() => connectLive(view));
+
+	// Ouverture d'une case poussée par le serveur : la salle d'attente file sur la quête, les autres pages se rechargent.
+	let seenSeq = 0;
+	$effect(() => {
+		const { seq, date } = live.opened;
+		if (seq === seenSeq) return;
+		seenSeq = seq;
+		if (page.url.pathname.startsWith('/attente')) goto(`/jour/${date}`, { invalidateAll: true });
+		else invalidateAll();
+	});
+	const me = $derived(live.me !== undefined ? (live.me ?? { points: 0, rank: null }) : data.me);
 	const initials = $derived(
 		(data.user?.displayName ?? '?')
 			.split(/\s+/)
@@ -36,7 +58,7 @@
 		<span class="avatar" aria-hidden="true">{initials}</span>
 		<span class="who">
 			<strong>{data.user?.displayName}</strong>
-			<span>{data.me.points} pts{data.me.rank ? ` · ${data.me.rank}e` : ''}</span>
+			<span>{me.points} pts{me.rank ? ` · ${me.rank}e` : ''}</span>
 		</span>
 	</div>
 </header>

@@ -44,3 +44,37 @@ export function cellState(
 
 /** Une réponse est « du jour J » si elle arrive le jour calendaire de la case (fuseau de l'événement). */
 export const isSameDay = (dayDate: string, at: Date, timezone: string) => localParts(at, timezone).date === dayDate;
+
+export type BoardEntry = {
+	userId: string;
+	name: string;
+	points: number;
+	ok: number;
+	answered: number;
+	elapsed: number;
+	/** Points et réponse sur la dernière case ouverte : sert à recalculer le rang « d'avant ». */
+	latestPoints: number;
+	latestAnswered: boolean;
+};
+export type Ranked = BoardEntry & { rank: number; delta: number | null };
+
+const byScore = (a: { p: number; e: number }, b: { p: number; e: number }) => b.p - a.p || a.e - b.e;
+
+/**
+ * Classe les joueurs (points desc, puis temps cumulé asc) et calcule l'évolution par rapport au
+ * classement d'avant la dernière case : delta > 0 = gagne des places, null = nouveau joueur.
+ */
+export function rankBoard(entries: BoardEntry[]): Ranked[] {
+	const before = entries
+		.filter((x) => x.answered - (x.latestAnswered ? 1 : 0) > 0)
+		.map((x) => ({ id: x.userId, p: x.points - x.latestPoints, e: x.elapsed }))
+		.sort(byScore);
+	const prevRank = new Map(before.map((x, i) => [x.id, i + 1]));
+	return entries
+		.map((x) => ({ x, p: x.points, e: x.elapsed }))
+		.sort(byScore)
+		.map(({ x }, i) => {
+			const prev = prevRank.get(x.userId);
+			return { ...x, rank: i + 1, delta: prev === undefined ? null : prev - (i + 1) };
+		});
+}

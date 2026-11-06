@@ -2,7 +2,17 @@
 	import Gift from '$lib/components/Gift.svelte';
 	import { countdown, serverClock } from '$lib/clock.svelte';
 	import { dayLabel } from '$lib/dates';
+	import { live } from '$lib/live.svelte';
 	let { data } = $props();
+
+	// Valeurs temps réel quand le flux est là, valeurs du rendu serveur sinon.
+	const answered = $derived(data.today && live.answered?.questionId === data.today.questionId ? live.answered.count : (data.today?.answered ?? 0));
+	const top = $derived((live.top ?? data.top).map((p) => ({ ...p, me: p.userId === data.userId })));
+	const stats = $derived(
+		live.me !== undefined
+			? { points: live.me?.points ?? 0, rank: live.me?.rank ?? null, ok: live.me?.ok ?? 0, answered: live.me?.answered ?? 0, ranked: live.ranked }
+			: data.stats
+	);
 
 	// svelte-ignore state_referenced_locally
 	const clock = serverClock(data.serverNow);
@@ -18,7 +28,7 @@
 				<span class="sticker wob corner">OUVERTE !</span>
 				<p class="hand kicker">la case du jour t'attend…</p>
 				<h1 id="today-title">{dayLabel(data.today.date)}</h1>
-				<p class="live"><span class="dot"></span><strong>{data.today.answered}</strong> lutin{data.today.answered > 1 ? 's ont' : ' a'} déjà répondu</p>
+				<p class="live"><span class="dot"></span><strong>{answered}</strong> lutin{answered > 1 ? 's ont' : ' a'} déjà répondu</p>
 				{#if bonusLeft > 0}
 					<div class="bonus">
 						<div class="row between"><span>bonus rapidité : <strong>+{bonusNow} pts</strong></span><span>encore {Math.ceil(bonusLeft / 60_000)} min</span></div>
@@ -35,7 +45,7 @@
 				<p class="result {data.today.state}">
 					{data.today.state === 'ok' ? `Bien joué : +${data.today.points} pts !` : 'Raté pour aujourd’hui… la bonne réponse sera dévoilée à la fin.'}
 				</p>
-				<p class="live"><span class="dot"></span><strong>{data.today.answered}</strong> lutin{data.today.answered > 1 ? 's ont' : ' a'} répondu</p>
+				<p class="live"><span class="dot"></span><strong>{answered}</strong> lutin{answered > 1 ? 's ont' : ' a'} répondu</p>
 				{#if data.next && nextIn}
 					<a class="btn secondary" href="/attente">Prochaine case dans {nextIn.d ? `${nextIn.d} j ` : ''}{nextIn.h}:{nextIn.m}:{nextIn.s}</a>
 				{/if}
@@ -58,9 +68,9 @@
 		</div>
 
 		<div class="stats">
-			<div class="stat gold"><span class="hand">mes points</span><strong>{data.stats.points}</strong></div>
-			<div class="stat white"><span class="hand">mon rang</span><strong>{#if data.stats.rank}{data.stats.rank}<small>e</small> <em>/ {data.stats.ranked}</em>{:else}–{/if}</strong></div>
-			<div class="stat green"><span class="hand">bonnes réponses</span><strong>{data.stats.ok} <em>/ {data.stats.answered}</em></strong></div>
+			<div class="stat gold"><span class="hand">mes points</span><strong>{stats.points}</strong></div>
+			<div class="stat white"><span class="hand">mon rang</span><strong>{#if stats.rank}{stats.rank}<small>e</small> <em>/ {stats.ranked}</em>{:else}–{/if}</strong></div>
+			<div class="stat green"><span class="hand">bonnes réponses</span><strong>{stats.ok} <em>/ {stats.answered}</em></strong></div>
 		</div>
 	</section>
 
@@ -85,19 +95,19 @@
 		<aside class="card board" aria-labelledby="lb-title">
 			<div class="row between">
 				<h2 id="lb-title">Classement</h2>
-				<span class="pill live-pill">LIVE</span>
+				<span class="pill live-pill" class:off={!live.connected} title={live.connected ? 'Mis à jour en direct' : 'Reconnexion…'}>LIVE</span>
 			</div>
-			{#if data.top.length === 0}
+			{#if top.length === 0}
 				<p class="hand">personne n'a encore répondu… sois le premier !</p>
 			{:else}
 				<ol>
-					{#each data.top as p (p.rank)}
+					{#each top as p (p.userId)}
 						<li class:me={p.me} class="r{p.rank}"><span class="rk">{p.rank}</span><span class="nm">{p.name}</span><strong>{p.points}</strong></li>
 					{/each}
 				</ol>
-				{#if data.stats.rank && data.stats.rank > 5}
+				{#if stats.rank && stats.rank > 5}
 					<p class="dots hand">· · ·</p>
-					<p class="mine"><span class="rk">{data.stats.rank}</span><span class="nm">Toi !</span><strong>{data.stats.points}</strong></p>
+					<p class="mine"><span class="rk">{stats.rank}</span><span class="nm">Toi !</span><strong>{stats.points}</strong></p>
 				{/if}
 			{/if}
 			<a href="/classement" class="hand all">voir tout le classement →</a>
@@ -153,6 +163,7 @@
 
 	.board { flex: 1 1 280px; background: var(--white); transform: rotate(1deg); display: flex; flex-direction: column; gap: 12px; border-radius: 24px; }
 	.live-pill { background: #c62f3b; color: var(--white); font-family: var(--font-title); }
+	.live-pill.off { background: var(--grey); color: var(--ink); }
 	ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 	li, .mine { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 2.5px solid var(--ink); border-radius: 14px; margin: 0; }
 	li.r1 { background: var(--gold); }

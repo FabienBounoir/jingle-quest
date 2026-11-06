@@ -2,6 +2,7 @@
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { answerLists, answers, days, db, listItems, questionAnswers, questions, users } from '$lib/server/db';
 import { eventEnd, isSameDay, points } from './game';
+import { getAnswered, getRanking, onAnswer } from './live';
 import { getSettings } from './settings';
 
 // ---------- Question (même contenu pour tous : cache process) ----------
@@ -70,10 +71,8 @@ export async function userAnswers(userId: string) {
 		.where(eq(answers.userId, userId));
 }
 
-export async function answeredCount(questionId: number): Promise<number> {
-	const [{ n }] = await db.select({ n: count() }).from(answers).where(eq(answers.questionId, questionId));
-	return n;
-}
+/** Nombre de réponses à une question (compteur en mémoire, cf. live.ts). */
+export const answeredCount = getAnswered;
 
 export async function correctLabels(questionId: number): Promise<string[]> {
 	const rows = await db
@@ -95,7 +94,12 @@ export type AnswerResult =
  * Enregistre la réponse d'un joueur (SPECS §7.3). `dryRun` (aperçu admin) : valide et calcule sans écrire.
  * L'heure qui compte est celle du serveur, jamais celle du client.
  */
-export async function submitAnswer(userId: string, date: string, itemId: number, opts: { dryRun: boolean }): Promise<AnswerResult> {
+export async function submitAnswer(
+	user: { id: string; displayName: string },
+	date: string,
+	itemId: number,
+	opts: { dryRun: boolean }
+): Promise<AnswerResult> {
 	const s = await getSettings();
 	const now = new Date();
 	const day = await getDay(date);
@@ -120,44 +124,18 @@ export async function submitAnswer(userId: string, date: string, itemId: number,
 	// La clé primaire (user, question) EST la règle « une seule tentative » : pas de course possible.
 	const inserted = await db
 		.insert(answers)
-		.values({ userId, questionId: q.id, itemId, isCorrect: correct, points: pts, elapsedMs })
+		.values({ userId: user.id, questionId: q.id, itemId, isCorrect: correct, points: pts, elapsedMs })
 		.onConflictDoNothing()
 		.returning({ points: answers.points });
 	if (inserted.length === 0) return { ok: false, status: 409, error: 'Tu as déjà répondu à cette quête.' };
-	invalidateStandings();
+	onAnswer({ userId: user.id, name: user.displayName, questionId: q.id, points: pts, correct, elapsedMs });
 	return { ok: true, correct, points: pts, dryRun: false };
 }
 
 // ---------- Classement ----------
 
-export type Standing = { userId: string; name: string; points: number; ok: number; answered: number; rank: number };
-
-// ponytail: classement recalculé en SQL, mis en cache 2 s (au pic de 9h, ~1 calcul/2 s au lieu d'un par
-// page). Le lot 4 le remplace par un classement en mémoire poussé en SSE.
-let standingsCache: { at: number; rows: Promise<Standing[]> } | null = null;
-const invalidateStandings = () => (standingsCache = null);
-
-export function getStandings(): Promise<Standing[]> {
-	if (standingsCache && Date.now() - standingsCache.at < 2000) return standingsCache.rows;
-	const rows = db
-		.select({
-			userId: users.id,
-			name: users.displayName,
-			points: sql<number>`sum(${answers.points})::int`,
-			ok: sql<number>`count(*) filter (where ${answers.isCorrect})::int`,
-			answered: sql<number>`count(*)::int`,
-			elapsed: sql<number>`sum(${answers.elapsedMs})::bigint`
-		})
-		.from(answers)
-		.innerJoin(users, eq(users.id, answers.userId))
-		.groupBy(users.id)
-		// Égalité de points : le plus rapide en cumulé passe devant (SPECS §3.4).
-		.orderBy(sql`sum(${answers.points}) desc`, sql`sum(${answers.elapsedMs}) asc`)
-		.then((r) => r.map((x, i) => ({ userId: x.userId, name: x.name, points: x.points, ok: x.ok, answered: x.answered, rank: i + 1 })));
-	rows.catch(() => invalidateStandings());
-	standingsCache = { at: Date.now(), rows };
-	return rows;
-}
+/** Classement général, tenu en mémoire et poussé en SSE (live.ts). */
+export const getStandings = getRanking;
 
 /** Classement du jour : réponses à une question, par points puis par heure de réponse. */
 export async function getDayStandings(questionId: number, limit = 50) {

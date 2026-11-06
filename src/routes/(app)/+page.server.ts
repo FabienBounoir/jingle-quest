@@ -37,6 +37,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const today = t
 		? {
 				date: t.date,
+				questionId: t.questionId!,
 				state: t.state,
 				points: t.points,
 				answered: await answeredCount(t.questionId!),
@@ -54,7 +55,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		ended: now >= end,
 		catchUp: cells.filter((c) => c.state === 'catch').length,
 		stats: { points: me?.points ?? 0, rank: me?.rank ?? null, ok: me?.ok ?? 0, answered: me?.answered ?? 0, ranked: standings.length, players },
-		top: standings.slice(0, 5).map((x) => ({ rank: x.rank, name: x.name, points: x.points, me: x.userId === locals.user!.id })),
+		top: standings.slice(0, 5).map((x) => ({ userId: x.userId, rank: x.rank, name: x.name, points: x.points })),
+		userId: locals.user!.id,
 		scoring: { pointsCorrect: s.pointsCorrect, bonusMax: s.bonusMax, bonusMinutes: s.bonusMinutes },
 		serverNow: now.getTime()
 	};

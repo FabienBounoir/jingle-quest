@@ -45,7 +45,7 @@ export const actions: Actions = {
 		if (!Number.isInteger(itemId)) return fail(400, { error: 'Choisis une réponse dans la liste.' });
 		const day = await getDay(params.date);
 		const dryRun = locals.isAdmin && !!day && day.opensAt > new Date();
-		const res = await submitAnswer(locals.user!.id, params.date, itemId, { dryRun });
+		const res = await submitAnswer(locals.user!, params.date, itemId, { dryRun });
 		if (!res.ok) return fail(res.status, { error: res.error });
 		const me = dryRun ? undefined : (await getStandings()).find((x) => x.userId === locals.user!.id);
 		return { result: { correct: res.correct, points: res.points, dryRun: res.dryRun, rank: me?.rank ?? null } };

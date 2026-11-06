@@ -2,7 +2,10 @@
 	import { goto } from '$app/navigation';
 	import { countdown, serverClock } from '$lib/clock.svelte';
 	import { dayLabel, dayShort } from '$lib/dates';
+	import { live } from '$lib/live.svelte';
 	let { data } = $props();
+	// La présence me compte aussi : « attendent avec toi » = les autres.
+	const others = $derived(live.presence ? Math.max(0, live.presence.waiting - 1) : null);
 
 	// svelte-ignore state_referenced_locally
 	const clock = serverClock(data.serverNow);
@@ -37,6 +40,13 @@
 		<div class="unit gold"><strong>{t.s}</strong><span class="hand">sec</span></div>
 	</div>
 
+	{#if others !== null}
+		<p class="waiting" role="status" aria-live="polite">
+			<span class="dot"></span>
+			{#if others === 0}tu es le premier lutin dans la salle !{:else}<strong>{others}</strong> lutin{others > 1 ? 's attendent' : ' attend'} avec toi{/if}
+		</p>
+	{/if}
+
 	<p class="hint">Reste sur cette page : la quête s'affiche toute seule à l'ouverture. Les premiers décrochent le plus gros bonus !</p>
 
 	{#if data.catchUp.length}
@@ -63,6 +73,10 @@
 	.unit strong { font: 700 72px/1 var(--font-title); font-variant-numeric: tabular-nums; }
 	.unit .hand { font-size: 20px; }
 	.hint { margin: 0; max-width: 520px; color: var(--white); }
+	.waiting { margin: 0; display: inline-flex; align-items: center; gap: 12px; padding: 12px 24px; border: 4px solid var(--ink); border-radius: 999px; background: var(--white); box-shadow: 0 6px 0 var(--ink); font-size: 18px; }
+	.waiting strong { font: 700 28px var(--font-title); font-variant-numeric: tabular-nums; }
+	.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--green-dark); animation: blink 1.2s infinite; }
+	@keyframes blink { 50% { opacity: 0.35; } }
 	.catch { border-style: dashed; background: var(--white); transform: rotate(1deg); text-align: left; display: flex; flex-direction: column; gap: 8px; }
 	.title { margin: 0; font: 700 20px var(--font-title); }
 	.catch .muted { margin: 0; }
