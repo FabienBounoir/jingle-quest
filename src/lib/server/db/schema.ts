@@ -87,8 +87,10 @@ export const days = pgTable('days', {
 	questionId: integer('question_id')
 		.unique()
 		.references(() => questions.id, { onDelete: 'set null' }),
-	/** Posé quand l'ouverture a été diffusée et notifiée : un redémarrage ne renvoie pas de push. */
-	notifiedAt: tstz('notified_at')
+	/** Posé quand l'ouverture a été diffusée aux clients connectés : un redémarrage ne la rejoue pas. */
+	notifiedAt: tstz('notified_at'),
+	/** Posé quand le rappel push « ouvre dans 5 min » est parti : jamais deux fois le même. */
+	remindedAt: tstz('reminded_at')
 });
 
 export const answers = pgTable(

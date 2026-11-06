@@ -42,8 +42,8 @@ export const actions: Actions = {
 				throw new BadInput('Tape EFFACER pour confirmer.');
 			const n = await db.transaction(async (tx) => {
 				const deleted = await tx.delete(answers).returning({ q: answers.questionId });
-				// Les cases déjà passées seront « rouvertes » sans bruit (pas de push) par la boucle temps réel.
-				await tx.update(days).set({ notifiedAt: sql`null` });
+				// Les cases déjà passées seront « rouvertes » sans bruit (ni rappel push) par la boucle temps réel.
+				await tx.update(days).set({ notifiedAt: sql`null`, remindedAt: sql`null` });
 				return deleted.length;
 			});
 			await reloadLive();

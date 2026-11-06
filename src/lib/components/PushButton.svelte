@@ -1,5 +1,5 @@
 <script lang="ts">
-	// « Me prévenir à l'ouverture » : abonnement Web Push de ce navigateur. Invisible si le navigateur
+	// « Me prévenir 5 min avant l'ouverture » : abonnement Web Push de ce navigateur. Invisible si le navigateur
 	// ne sait pas faire (ex. iPhone hors application installée sur l'écran d'accueil) ou si le
 	// déploiement n'a pas de clés VAPID.
 	let { vapidKey }: { vapidKey: string | null } = $props();
@@ -60,9 +60,9 @@
 	<div class="card push">
 		<svg aria-hidden="true" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" /></svg>
 		<div class="txt">
-			<p class="title">Me prévenir à l'ouverture</p>
+			<p class="title">Me prévenir 5 min avant</p>
 			<p class="muted">
-				{#if status === 'denied'}Notifications bloquées : autorise-les dans les réglages du navigateur.{:else}Une notification sur ce navigateur, même onglet fermé.{/if}
+				{#if status === 'denied'}Notifications bloquées : autorise-les dans les réglages du navigateur.{:else}Une notification sur ce navigateur avant chaque ouverture, même onglet fermé.{/if}
 			</p>
 		</div>
 		{#if status !== 'denied'}

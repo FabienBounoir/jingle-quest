@@ -14,8 +14,10 @@ type Client = { userId: string; view: View; send: (chunk: string) => boolean };
 const TOP: Record<View, number> = { calendar: 5, board: 50, question: 0, waiting: 0 };
 const HEARTBEAT_MS = 25_000; // sous le timeout de la Route OpenShift (SPECS §5.3)
 const OPEN_BROADCAST_WINDOW_MS = 5 * 60_000; // au démarrage, une case ouverte il y a plus longtemps ne « s'ouvre » plus
+// ponytail: rappel push fixe à 5 min avant l'ouverture ; à passer dans les réglages admin si on veut le faire varier.
+const REMINDER_LEAD_MS = 5 * 60_000;
 
-type Schedule = { date: string; opensAt: number; questionId: number | null; notified: boolean }[];
+type Schedule = { date: string; opensAt: number; questionId: number | null; notified: boolean; reminded: boolean }[];
 
 const state = {
 	clients: new Set<Client>(),
@@ -49,11 +51,17 @@ export function ensureLive(): Promise<void> {
 
 async function loadSchedule() {
 	const rows = await db
-		.select({ date: days.date, opensAt: days.opensAt, questionId: days.questionId, notifiedAt: days.notifiedAt })
+		.select({ date: days.date, opensAt: days.opensAt, questionId: days.questionId, notifiedAt: days.notifiedAt, remindedAt: days.remindedAt })
 		.from(days)
 		.where(eq(days.excluded, false))
 		.orderBy(asc(days.date));
-	state.schedule = rows.map((r) => ({ date: r.date, opensAt: r.opensAt.getTime(), questionId: r.questionId, notified: r.notifiedAt !== null }));
+	state.schedule = rows.map((r) => ({
+		date: r.date,
+		opensAt: r.opensAt.getTime(),
+		questionId: r.questionId,
+		notified: r.notifiedAt !== null,
+		reminded: r.remindedAt !== null
+	}));
 	const now = Date.now();
 	state.latestQuestion = state.schedule.filter((d) => d.opensAt <= now && d.questionId).at(-1)?.questionId ?? null;
 }
@@ -192,26 +200,41 @@ function broadcast(build: (c: Client) => string | null) {
 
 // ---------- Boucle ----------
 
-/** Notification push d'ouverture, sans bloquer la boucle (l'envoi à 2 000 abonnés prend quelques secondes). */
-function notifyOpening(date: string) {
-	getSettings()
-		.then((s) =>
-			sendToAll({
-				title: s.eventName,
-				body: 'Une nouvelle case est ouverte ! Les premiers décrochent le bonus de rapidité.',
-				url: `/jour/${date}`,
-				tag: 'jq-open'
-			})
-		)
-		.then((r) => r.sent + r.failed > 0 && console.log('push_open', date, r))
-		.catch((e) => console.error('push_open_failed', e));
+/**
+ * Rappel push 5 min avant l'ouverture, qui mène à la salle d'attente : on arrive en avance pour le
+ * bonus de rapidité. Uniquement avant l'heure (un pod redémarré après l'ouverture ne prévient pas en
+ * retard), une seule fois par case grâce à reminded_at en base.
+ */
+async function remindDueDays(now: number) {
+	for (const d of state.schedule) {
+		if (d.reminded || !d.questionId || d.opensAt - REMINDER_LEAD_MS > now) continue;
+		d.reminded = true;
+		const claimed = await db
+			.update(days)
+			.set({ remindedAt: new Date(now) })
+			.where(and(eq(days.date, d.date), isNull(days.remindedAt)))
+			.returning({ date: days.date });
+		if (claimed.length === 0 || now >= d.opensAt) continue;
+		const minutes = Math.max(1, Math.round((d.opensAt - now) / 60_000));
+		getSettings()
+			.then((s) =>
+				sendToAll({
+					title: s.eventName,
+					body: `La case du jour s'ouvre dans ${minutes} min ! Rejoins la salle d'attente pour décrocher le bonus.`,
+					url: '/attente',
+					tag: 'jq-reminder'
+				})
+			)
+			.then((r) => r.sent + r.failed > 0 && console.log('push_reminder', d.date, r))
+			.catch((e) => console.error('push_reminder_failed', e));
+	}
 }
 
 async function openDueDays(now: number) {
 	for (const d of state.schedule) {
 		if (d.notified || d.opensAt > now) continue;
 		d.notified = true;
-		// notified_at en base : un redémarrage ne rejoue jamais une ouverture (ni, au lot 5, une notification).
+		// notified_at en base : un redémarrage ne rejoue jamais une ouverture.
 		const claimed = await db
 			.update(days)
 			.set({ notifiedAt: new Date(now) })
@@ -229,12 +252,12 @@ async function openDueDays(now: number) {
 		}
 		state.dirtyAnswered = true;
 		broadcast(() => sse('open', { date: d.date }));
-		if (d.questionId) notifyOpening(d.date);
 	}
 }
 
 async function tick() {
 	const now = Date.now();
+	await remindDueDays(now);
 	await openDueDays(now);
 
 	if (state.dirtyBoard) {
