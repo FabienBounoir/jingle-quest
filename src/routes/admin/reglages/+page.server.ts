@@ -68,7 +68,15 @@ export const actions: Actions = {
 				const insert = tx.insert(days).values(rows);
 				// Par défaut on garde les heures déjà personnalisées, la question et l'exclusion de chaque jour.
 				await (resetTimes
-					? insert.onConflictDoUpdate({ target: days.date, set: { opensAt: sql`excluded.opens_at` } })
+					? insert.onConflictDoUpdate({
+							target: days.date,
+							// Même réarmement que l'édition d'une case : une case remise dans le futur repart de zéro.
+							set: {
+								opensAt: sql`excluded.opens_at`,
+								notifiedAt: sql`case when excluded.opens_at > now() then null else ${days.notifiedAt} end`,
+								remindedAt: sql`case when excluded.opens_at > now() then null else ${days.remindedAt} end`
+							}
+						})
 					: insert.onConflictDoNothing());
 			});
 			return { ok: `Calendrier généré : ${dates.length} case${dates.length > 1 ? 's' : ''}.` };

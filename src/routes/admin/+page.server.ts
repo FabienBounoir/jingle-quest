@@ -33,9 +33,13 @@ export const actions: Actions = {
 			const date = isoDate(fd, 'date', 'Jour');
 			const time = hhmm(fd, 'time', 'Heure');
 			const s = await getSettings();
+			const opensAt = zonedTime(date, time, s.timezone);
+			// Case repoussée dans le futur (ex. 9h → 13h45 après le rappel de 8h55) : on réarme son
+			// rappel push et son ouverture, sinon ils seraient considérés comme déjà faits.
+			const rearm = opensAt.getTime() > Date.now() ? { notifiedAt: null, remindedAt: null } : {};
 			const done = await db
 				.update(days)
-				.set({ opensAt: zonedTime(date, time, s.timezone), excluded: fd.get('excluded') === 'on' })
+				.set({ opensAt, excluded: fd.get('excluded') === 'on', ...rearm })
 				.where(eq(days.date, date))
 				.returning({ date: days.date });
 			if (done.length === 0) throw new BadInput('Ce jour n’existe plus : regénère le calendrier.');

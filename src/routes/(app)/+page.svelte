@@ -83,7 +83,6 @@
 					<span><i class="sw ok"></i>Réussie</span>
 					<span><i class="sw ko"></i>Ratée</span>
 					<span><i class="sw catch"></i>À rattraper</span>
-					<span><i class="sw wrapped"></i>Emballée</span>
 				</div>
 			</div>
 			<div class="grid">
