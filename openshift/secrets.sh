@@ -1,5 +1,6 @@
 #!/bin/sh
 # Crée les deux secrets du namespace courant, à lancer une seule fois : `sh openshift/secrets.sh`
+# (questions interactives), ou `sh openshift/secrets.sh -y [emails-admin] [domaines]`.
 # Mot de passe Postgres et clés de notification (VAPID) générés ici, jamais affichés ni committés.
 # ADMIN_EMAILS et ALLOWED_EMAIL_DOMAINS sont ici (pas dans le ConfigMap) car la CI réapplique le
 # ConfigMap à chaque déploiement. Le SSO peut rester vide au premier déploiement ; le compléter avec :
@@ -7,10 +8,20 @@
 #   oc rollout restart deployment/jingle-quest
 set -eu
 NS="$(oc project -q)"
-printf 'Namespace : %s — on continue ? [o/N] ' "$NS"; read -r ok; [ "$ok" = "o" ] || exit 1
 DEFAULT_ADMIN="$(oc whoami 2>/dev/null || true)"
-printf 'Emails admin, séparés par des virgules [%s] : ' "$DEFAULT_ADMIN"; read -r ADMINS; ADMINS="${ADMINS:-$DEFAULT_ADMIN}"
-printf 'Domaines email autorisés (vide = tout compte du SSO) : '; read -r DOMAINS
+
+# Sans question (utilisable avec `!` dans Claude Code, ou en CI) :
+#   sh openshift/secrets.sh -y [emails-admin] [domaines-autorisés]
+if [ "${1:-}" = "-y" ]; then
+  ADMINS="${2:-$DEFAULT_ADMIN}"
+  DOMAINS="${3:-}"
+else
+  printf 'Namespace : %s — on continue ? [o/N] ' "$NS"; read -r ok; [ "$ok" = "o" ] || exit 1
+  printf 'Emails admin, séparés par des virgules [%s] : ' "$DEFAULT_ADMIN"; read -r ADMINS; ADMINS="${ADMINS:-$DEFAULT_ADMIN}"
+  printf 'Domaines email autorisés (vide = tout compte du SSO) : '; read -r DOMAINS
+fi
+[ -n "$ADMINS" ] || { echo "Aucun email admin : passe-le en argument."; exit 1; }
+echo "Namespace $NS — admins : $ADMINS — domaines : ${DOMAINS:-(tous)}"
 
 PW="$(openssl rand -hex 24)"
 KEYS="$(npx -y web-push generate-vapid-keys --json)"
