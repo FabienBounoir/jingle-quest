@@ -4,7 +4,8 @@
 @font-face { font-family: 'Gochi Hand'; src: url('/fonts/gochi-hand.woff2') format('woff2'); font-display: swap; }
 
 :root {
-	--bg: #c62f3b; /* écrasée par la couleur de marque (settings.bg_color) dans +layout.svelte */
+	/* --bg (couleur de marque) n'est PAS définie ici : +layout.svelte l'injecte dans un <style> placé AVANT
+	   cette feuille, qu'une valeur ici écraserait. Le repli rouge est dans `body`. */
 	--ink: #2a1a1f;
 	--paper: #fff8ec;
 	--white: #ffffff;
@@ -29,7 +30,7 @@ body {
 	margin: 0;
 	min-height: 100vh;
 	min-height: 100dvh;
-	background: var(--bg) url('/doodle.svg') repeat;
+	background: var(--bg, #c62f3b) url('/doodle.svg') repeat;
 	color: var(--ink);
 	font-family: var(--font-body);
 	font-weight: 700;
