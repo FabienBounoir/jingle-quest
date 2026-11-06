@@ -1,6 +1,7 @@
 # Construit l'image depuis le miroir GitLab innersource du dépôt GitHub. La CI remplace
 # CHANGEME-git-uri par $GIT_SOURCE_URI et lance `oc start-build --commit=<sha>`.
-# Miroir lisible sans authentification : pas de sourceSecret (à ajouter si le dépôt devient privé).
+# Le cluster doit s'authentifier auprès d'innersource (même depuis un dépôt lisible sans compte
+# ailleurs) : secret basic-auth gitlab-innersource-jingle, avec un deploy token en lecture seule.
 # Dépannage depuis un poste : oc start-build jingle-quest --from-repo=. --follow
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
@@ -13,6 +14,8 @@ spec:
     git:
       uri: CHANGEME-git-uri
       ref: main
+    sourceSecret:
+      name: gitlab-innersource-jingle
   strategy:
     type: Docker
     dockerStrategy:
