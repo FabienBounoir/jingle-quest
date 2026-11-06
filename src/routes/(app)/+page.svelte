@@ -3,6 +3,7 @@
 	import { countdown, serverClock } from '$lib/clock.svelte';
 	import { dayLabel } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
+	import { ordinal } from '$lib/text';
 	import PushButton from '$lib/components/PushButton.svelte';
 	let { data } = $props();
 
@@ -70,7 +71,7 @@
 
 		<div class="stats">
 			<div class="stat gold"><span class="hand">mes points</span><strong>{stats.points}</strong></div>
-			<div class="stat white"><span class="hand">mon rang</span><strong>{#if stats.rank}{stats.rank}<small>e</small> <em>/ {stats.ranked}</em>{:else}–{/if}</strong></div>
+			<div class="stat white"><span class="hand">mon rang</span><strong>{#if stats.rank}{stats.rank}<small>{ordinal(stats.rank)}</small> <em>/ {stats.ranked}</em>{:else}–{/if}</strong></div>
 			<div class="stat green"><span class="hand">bonnes réponses</span><strong>{stats.ok} <em>/ {stats.answered}</em></strong></div>
 		</div>
 	</section>

@@ -7,16 +7,20 @@ const min = 60_000;
 
 describe('points', () => {
 	it('bonus linéaire de 50 à 0 sur 60 min le jour J', () => {
-		expect(points(true, true, 0, s)).toBe(150);
-		expect(points(true, true, 30 * min, s)).toBe(125);
-		expect(points(true, true, 60 * min, s)).toBe(100);
-		expect(points(true, true, 5 * 60 * min, s)).toBe(100);
+		expect(points(1, true, 0, s)).toBe(150);
+		expect(points(1, true, 30 * min, s)).toBe(125);
+		expect(points(1, true, 60 * min, s)).toBe(100);
+		expect(points(1, true, 5 * 60 * min, s)).toBe(100);
 		expect(bonusAt(-5000, s)).toBe(50); // horloge client en avance : jamais plus que le max
 	});
 	it('rattrapage sans bonus, mauvaise réponse à 0', () => {
-		expect(points(true, false, 0, s)).toBe(50);
-		expect(points(false, true, 0, s)).toBe(0);
-		expect(points(false, false, 0, s)).toBe(0);
+		expect(points(1, false, 0, s)).toBe(50);
+		expect(points(0, true, 0, s)).toBe(0);
+		expect(points(0, false, 0, s)).toBe(0);
+	});
+	it('points partiels au prorata, bonus compris', () => {
+		expect(points(0.7, true, 0, s)).toBe(105); // 70 % de 150
+		expect(points(0.5, false, 0, s)).toBe(25);
 	});
 });
 
@@ -40,8 +44,9 @@ describe('cellState', () => {
 		expect(cellState(day, null, at('2026-12-09T08:00:00Z'), end, tz)).toBe('today');
 		expect(cellState(day, null, at('2026-12-10T08:00:00Z'), end, tz)).toBe('catch');
 		expect(cellState(day, null, at('2026-12-25T08:00:00Z'), end, tz)).toBe('closed');
-		expect(cellState(day, { isCorrect: true }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ok');
-		expect(cellState(day, { isCorrect: false }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ko');
+		expect(cellState(day, { score: 1 }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ok');
+		expect(cellState(day, { score: 0.4 }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('part');
+		expect(cellState(day, { score: 0 }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ko');
 		expect(cellState({ ...day, hasQuestion: false }, null, at('2026-12-09T09:00:00Z'), end, tz)).toBe('empty');
 	});
 });

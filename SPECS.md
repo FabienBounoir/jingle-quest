@@ -39,6 +39,18 @@ On en fait **un template** : rien n'est propre à Sopra Steria dans le code. Nom
 - Saisie côté joueur : un **champ avec autocomplétion** limité aux valeurs de la liste. Le joueur choisit une seule valeur.
 - **Une seule tentative** par question (❓ par défaut, dis-moi si tu veux plusieurs tentatives avec une pénalité).
 
+### 3.2 bis Types de question (ajoutés le 2026-11-06)
+
+| Type | Côté joueur | Points |
+|---|---|---|
+| Liste | autocomplétion dans une liste (collaborateurs, projets…) | juste ou faux |
+| QCM | 2 à 6 propositions à cliquer, saisies par l'admin | juste ou faux |
+| Estimation | un nombre (unité optionnelle) | pile à 1 % = 100 %, à 10 % = 70 %, à 25 % = 40 % |
+| Ordre | 3 à 5 éléments à classer avec ↑ ↓ | part des éléments à la bonne place |
+| Zone | un clic sur l'image, l'admin a dessiné un rectangle | dedans = juste |
+
+Les points partiels s'appliquent au barème complet, bonus de rapidité compris. La solution est stockée à part (`questions.solution`) et n'est jamais envoyée au navigateur avant la fin. Les éléments à ordonner sont mélangés à l'enregistrement, donc l'ordre affiché ne trahit rien. Code : `src/lib/server/questionTypes.ts`.
+
 ### 3.3 Listes de réponses
 
 - Ce sont des listes réutilisables, par exemple « Collaborateurs », « Projets », « Clients ».

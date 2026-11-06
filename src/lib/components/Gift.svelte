@@ -3,7 +3,7 @@
 		date: string;
 		num: number;
 		dow: string;
-		state: 'wrapped' | 'empty' | 'today' | 'catch' | 'ok' | 'ko' | 'closed';
+		state: 'wrapped' | 'empty' | 'today' | 'catch' | 'ok' | 'part' | 'ko' | 'closed';
 		points: number;
 		next: boolean;
 	};
@@ -28,6 +28,7 @@
 			today: 'ouverte, à toi de jouer',
 			catch: 'à rattraper',
 			ok: `réussie, ${cell.points} points`,
+			part: `presque, ${cell.points} points`,
 			ko: 'ratée',
 			closed: 'terminée sans réponse'
 		}[cell.state]
@@ -52,7 +53,7 @@
 	{:else}
 		<span class="head">
 			{cell.dow}
-			{#if cell.state === 'ok'}
+			{#if cell.state === 'ok' || cell.state === 'part'}
 				<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13l5 5L20 6" /></svg>
 			{:else if cell.state === 'ko'}
 				<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -62,7 +63,7 @@
 		</span>
 		<span class="num">{cell.num}</span>
 		<span class="foot">
-			{#if cell.state === 'ok'}+{cell.points} pts{:else if cell.state === 'ko'}raté…{:else if cell.state === 'catch'}à rattraper{:else}terminée{/if}
+			{#if cell.state === 'ok' || cell.state === 'part'}+{cell.points} pts{:else if cell.state === 'ko'}raté…{:else if cell.state === 'catch'}à rattraper{:else}terminée{/if}
 		</span>
 	{/if}
 </svelte:element>
@@ -104,6 +105,8 @@
 
 	/* Case ouverte */
 	.ok { background: var(--green); }
+	/* Points partiels (estimation, ordre) : à mi-chemin entre réussie et ratée. */
+	.part { background: linear-gradient(135deg, var(--green) 0 50%, #fff0b8 50% 100%); }
 	.ko { background: var(--grey); }
 	.catch { background: var(--white); border-style: dashed; box-shadow: none; }
 	.closed { background: var(--grey); opacity: 0.7; }

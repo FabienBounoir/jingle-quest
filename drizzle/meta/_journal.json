@@ -15,6 +15,13 @@
       "when": 1794003343179,
       "tag": "0001_reminded_at",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794003810588,
+      "tag": "0002_question_types",
+      "breakpoints": true
     }
   ]
 }

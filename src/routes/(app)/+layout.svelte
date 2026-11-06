@@ -2,6 +2,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { connectLive, live, type View } from '$lib/live.svelte';
+	import { ordinal } from '$lib/text';
 	let { data, children } = $props();
 
 	const view = $derived<View>(
@@ -58,7 +59,7 @@
 		<span class="avatar" aria-hidden="true">{initials}</span>
 		<span class="who">
 			<strong>{data.user?.displayName}</strong>
-			<span>{me.points} pts{me.rank ? ` · ${me.rank}e` : ''}</span>
+			<span>{me.points} pts{me.rank ? ` · ${me.rank}${ordinal(me.rank)}` : ''}</span>
 		</span>
 	</div>
 </header>

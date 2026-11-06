@@ -1,6 +1,8 @@
 import { sql } from 'drizzle-orm';
 import {
 	boolean,
+	jsonb,
+	real,
 	check,
 	customType,
 	date,
@@ -56,15 +58,27 @@ export const listItems = pgTable(
 	(t) => [unique().on(t.listId, t.label)]
 );
 
-export const questions = pgTable('questions', {
-	id: serial('id').primaryKey(),
-	text: text('text').notNull(),
-	listId: integer('list_id')
-		.notNull()
-		.references(() => answerLists.id),
-	image: bytea('image'),
-	imageMime: text('image_mime')
-});
+/** list (autocomplétion dans une liste), choice (QCM), number (estimation), order (remettre dans l'ordre), zone (clic sur l'image). */
+export const QUESTION_TYPES = ['list', 'choice', 'number', 'order', 'zone'] as const;
+export type QuestionType = (typeof QUESTION_TYPES)[number];
+
+export const questions = pgTable(
+	'questions',
+	{
+		id: serial('id').primaryKey(),
+		type: text('type').$type<QuestionType>().notNull().default('list'),
+		text: text('text').notNull(),
+		/** Type « list » uniquement (ses bonnes réponses sont dans question_answers). */
+		listId: integer('list_id').references(() => answerLists.id),
+		image: bytea('image'),
+		imageMime: text('image_mime'),
+		/** Ce que voit le joueur (propositions du QCM, éléments mélangés, unité…). Cf. questionTypes.ts. */
+		config: jsonb('config').notNull().default({}),
+		/** La solution des types hors « list ». Ne quitte JAMAIS le serveur avant la fin de l'événement. */
+		solution: jsonb('solution').notNull().default({})
+	},
+	(t) => [check('questions_type', sql`${t.type} in ('list', 'choice', 'number', 'order', 'zone')`)]
+);
 
 /** Bonnes réponses d'une question (une ou plusieurs valeurs de sa liste). */
 export const questionAnswers = pgTable(
@@ -102,9 +116,12 @@ export const answers = pgTable(
 		questionId: integer('question_id')
 			.notNull()
 			.references(() => questions.id, { onDelete: 'cascade' }),
-		itemId: integer('item_id')
-			.notNull()
-			.references(() => listItems.id),
+		/** Type « list » : la valeur choisie. Autres types : null, la réponse est dans `value`. */
+		itemId: integer('item_id').references(() => listItems.id),
+		value: jsonb('value'),
+		/** Part des points obtenue, de 0 à 1 (estimation et ordre donnent des points partiels). */
+		score: real('score').notNull().default(0),
+		/** score === 1 : réponse parfaite (compte dans « bonnes réponses »). */
 		isCorrect: boolean('is_correct').notNull(),
 		points: integer('points').notNull(),
 		elapsedMs: integer('elapsed_ms').notNull(),

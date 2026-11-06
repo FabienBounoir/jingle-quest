@@ -5,6 +5,8 @@ import { answerLists, answers, days, db, listItems, questionAnswers, questions, 
 import { getSettings, invalidateSettings } from './settings';
 import { isValidTimeZone, localParts, zonedTime } from './tz';
 import { MAX_IMAGE_BYTES, MAX_LABEL, sniffImage } from './upload';
+import { parseAdmin } from './questionTypes';
+import { QUESTION_TYPES, type QuestionType } from './db/schema';
 
 export const FORMAT = 'jingle-quest/1';
 
@@ -27,7 +29,17 @@ export type ExportFile = {
 		logo: Image | null;
 	};
 	lists: { name: string; items: string[] }[];
-	questions: { text: string; list: string; correct: string[]; day: string | null; image: Image | null }[];
+	/** type « list » : list + correct ; autres types : config + solution (cf. questionTypes.ts). */
+	questions: {
+		type: QuestionType;
+		text: string;
+		list: string | null;
+		correct: string[];
+		config: unknown;
+		solution: unknown;
+		day: string | null;
+		image: Image | null;
+	}[];
 	days: { date: string; time: string; excluded: boolean }[];
 };
 
@@ -62,8 +74,11 @@ export async function exportData(): Promise<ExportFile> {
 		},
 		lists: lists.map((l) => ({ name: l.name, items: items.filter((i) => i.listId === l.id).map((i) => i.label) })),
 		questions: qs.map((q) => ({
+			type: q.type,
 			text: q.text,
-			list: listName.get(q.listId)!,
+			list: q.listId ? listName.get(q.listId)! : null,
+			config: q.config,
+			solution: q.solution,
 			correct: qa.filter((a) => a.questionId === q.id).map((a) => label.get(a.itemId)!),
 			day: dayOf.get(q.id) ?? null,
 			image: img(q.image, q.imageMime)
@@ -73,6 +88,29 @@ export async function exportData(): Promise<ExportFile> {
 }
 
 // ---------- Validation (pure, testée) ----------
+
+/** Reconstruit le formulaire admin d'une question typée à partir de l'export, pour la revalider. */
+function typedForm(type: Exclude<QuestionType, 'list'>, config: unknown, solution: unknown): FormData {
+	const c = (config ?? {}) as { options?: unknown[]; unit?: unknown; items?: unknown[] };
+	const sol = (solution ?? {}) as { correct?: unknown; value?: unknown; order?: unknown[]; x?: unknown; y?: unknown; w?: unknown; h?: unknown };
+	const fd = new FormData();
+	const add = (k: string, v: unknown) => fd.append(k, String(v ?? ''));
+	if (type === 'choice') {
+		for (const o of c.options ?? []) add('option', o);
+		add('correct', sol.correct);
+	} else if (type === 'number') {
+		add('value', sol.value);
+		add('unit', c.unit);
+	} else if (type === 'order') {
+		for (const i of sol.order ?? []) add('item', (c.items ?? [])[Number(i)]);
+	} else {
+		add('zx', sol.x);
+		add('zy', sol.y);
+		add('zw', sol.w);
+		add('zh', sol.h);
+	}
+	return fd;
+}
 
 export class ImportError extends Error {}
 
@@ -134,13 +172,27 @@ export function parseExport(raw: unknown) {
 	const qs = f.questions.map((q, i) => {
 		const where = `Question ${i + 1}`;
 		if (!isText(q?.text, 500)) throw new ImportError(`${where} : texte invalide.`);
-		const items = lists.get(q.list);
-		if (!items) throw new ImportError(`${where} : liste « ${q.list} » absente du fichier.`);
-		if (!Array.isArray(q.correct) || q.correct.length === 0 || !q.correct.every((c) => items.has(c)))
-			throw new ImportError(`${where} : bonnes réponses absentes de la liste « ${q.list} ».`);
+		const type = (q.type ?? 'list') as QuestionType; // exports d'avant les types : tout est « list »
+		if (!QUESTION_TYPES.includes(type)) throw new ImportError(`${where} : type « ${type} » inconnu.`);
 		if (q.day !== null && (!dates.has(q.day) || usedDays.has(q.day))) throw new ImportError(`${where} : jour ${q.day} inconnu ou déjà pris.`);
 		if (q.day) usedDays.add(q.day);
-		return { text: q.text, list: q.list, correct: q.correct, day: q.day, image: image(q.image, where) };
+		const img = image(q.image, where);
+		if (type === 'list') {
+			const items = q.list ? lists.get(q.list) : undefined;
+			if (!items) throw new ImportError(`${where} : liste « ${q.list} » absente du fichier.`);
+			if (!Array.isArray(q.correct) || q.correct.length === 0 || !q.correct.every((c) => items.has(c)))
+				throw new ImportError(`${where} : bonnes réponses absentes de la liste « ${q.list} ».`);
+			return { type, text: q.text, list: q.list, correct: q.correct, config: {}, solution: {}, day: q.day, image: img };
+		}
+		if (type === 'zone' && !img) throw new ImportError(`${where} : une zone a besoin de son image.`);
+		// On repasse par la validation du formulaire admin : un fichier ne peut rien introduire qu'un
+		// admin n'aurait pas pu saisir (l'ordre est remélangé au passage).
+		try {
+			const typed = parseAdmin(type, typedForm(type, q.config, q.solution));
+			return { type, text: q.text, list: null, correct: [], ...typed, day: q.day, image: img };
+		} catch (e) {
+			throw new ImportError(`${where} : ${e instanceof Error ? e.message : 'réglages invalides'}`);
+		}
 	});
 	return {
 		settings: { ...s, logo: image(s.logo, 'Logo') },
@@ -183,9 +235,18 @@ export async function importData(raw: unknown): Promise<{ lists: number; questio
 		for (const q of data.questions) {
 			const [row] = await tx
 				.insert(questions)
-				.values({ text: q.text, listId: listIds.get(q.list)!, image: q.image?.buf ?? null, imageMime: q.image?.mime ?? null })
+				.values({
+					type: q.type,
+					text: q.text,
+					listId: q.list ? listIds.get(q.list)! : null,
+					config: q.config,
+					solution: q.solution,
+					image: q.image?.buf ?? null,
+					imageMime: q.image?.mime ?? null
+				})
 				.returning({ id: questions.id });
-			await tx.insert(questionAnswers).values(q.correct.map((c) => ({ questionId: row.id, itemId: itemIds.get(`${q.list}\u0000${c}`)! })));
+			if (q.type === 'list')
+				await tx.insert(questionAnswers).values(q.correct.map((c) => ({ questionId: row.id, itemId: itemIds.get(`${q.list}\u0000${c}`)! })));
 			if (q.day) questionOfDay.set(q.day, row.id);
 		}
 		if (data.days.length)

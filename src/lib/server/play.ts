@@ -2,48 +2,70 @@
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { answerLists, answers, days, db, listItems, questionAnswers, questions, users } from '$lib/server/db';
 import { eventEnd, isSameDay, points } from './game';
+import { BadAnswer, answerText, scoreAnswer, solutionText, type ZoneSolution } from './questionTypes';
+import type { QuestionType } from './db/schema';
 import { getAnswered, getRanking, onAnswer } from './live';
 import { getSettings } from './settings';
 
 // ---------- Question (même contenu pour tous : cache process) ----------
 
+/** Ce que reçoit le navigateur : jamais la solution (elle reste dans `secret`, côté serveur). */
 export type QuestionPayload = {
 	id: number;
+	type: QuestionType;
 	text: string;
 	hasImage: boolean;
-	listName: string;
+	/** Type « list » : nom de la liste et ses valeurs (autocomplétion). */
+	listName: string | null;
 	items: { id: number; label: string }[];
+	/** Autres types : propositions du QCM, éléments mélangés, unité… */
+	config: unknown;
 };
+type CachedQuestion = QuestionPayload & { secret: unknown };
 
 // ponytail: cache sans TTL, vidé par l'admin à chaque enregistrement (un seul pod, SPECS §7.6).
 // À 9h, 2 000 chargements de la même question = 1 lecture en base.
-const questionCache = new Map<number, Promise<QuestionPayload>>();
+const questionCache = new Map<number, Promise<CachedQuestion>>();
 
 export function invalidateQuestions() {
 	questionCache.clear();
 }
 
-export function getQuestion(id: number): Promise<QuestionPayload> {
+function loadQuestion(id: number): Promise<CachedQuestion> {
 	let p = questionCache.get(id);
 	if (!p) {
 		p = (async () => {
 			const [q] = await db
-				.select({ id: questions.id, text: questions.text, mime: questions.imageMime, listId: questions.listId, listName: answerLists.name })
+				.select({
+					id: questions.id,
+					type: questions.type,
+					text: questions.text,
+					mime: questions.imageMime,
+					listId: questions.listId,
+					listName: answerLists.name,
+					config: questions.config,
+					solution: questions.solution
+				})
 				.from(questions)
-				.innerJoin(answerLists, eq(answerLists.id, questions.listId))
+				.leftJoin(answerLists, eq(answerLists.id, questions.listId))
 				.where(eq(questions.id, id));
 			if (!q) throw new Error(`question ${id} introuvable`);
-			const items = await db
-				.select({ id: listItems.id, label: listItems.label })
-				.from(listItems)
-				.where(eq(listItems.listId, q.listId))
-				.orderBy(asc(listItems.label));
-			return { id: q.id, text: q.text, hasImage: q.mime !== null, listName: q.listName, items };
+			const items =
+				q.type === 'list' && q.listId
+					? await db.select({ id: listItems.id, label: listItems.label }).from(listItems).where(eq(listItems.listId, q.listId)).orderBy(asc(listItems.label))
+					: [];
+			return { id: q.id, type: q.type, text: q.text, hasImage: q.mime !== null, listName: q.listName, items, config: q.config, secret: q.solution };
 		})();
 		p.catch(() => questionCache.delete(id));
 		questionCache.set(id, p);
 	}
 	return p;
+}
+
+/** La question telle qu'on peut l'envoyer au navigateur (sans la solution). */
+export async function getQuestion(id: number): Promise<QuestionPayload> {
+	const { secret: _secret, ...pub } = await loadQuestion(id);
+	return pub;
 }
 
 // ---------- Calendrier ----------
@@ -66,7 +88,7 @@ export async function getDay(date: string) {
 
 export async function userAnswers(userId: string) {
 	return db
-		.select({ questionId: answers.questionId, itemId: answers.itemId, isCorrect: answers.isCorrect, points: answers.points })
+		.select({ questionId: answers.questionId, itemId: answers.itemId, value: answers.value, score: answers.score, isCorrect: answers.isCorrect, points: answers.points })
 		.from(answers)
 		.where(eq(answers.userId, userId));
 }
@@ -74,30 +96,42 @@ export async function userAnswers(userId: string) {
 /** Nombre de réponses à une question (compteur en mémoire, cf. live.ts). */
 export const answeredCount = getAnswered;
 
-export async function correctLabels(questionId: number): Promise<string[]> {
+/** La réponse d'un joueur, en texte (zone : null, elle se dessine sur l'image). */
+export function myAnswerText(q: QuestionPayload, a: { itemId: number | null; value: unknown }): string | null {
+	if (q.type === 'list') return q.items.find((i) => i.id === a.itemId)?.label ?? '?';
+	return answerText(q.type, q.config, a.value);
+}
+
+/**
+ * La solution, à n'appeler qu'une fois l'événement terminé : texte, et rectangle pour une zone.
+ */
+export async function reveal(questionId: number): Promise<{ text: string | null; zone: ZoneSolution | null }> {
+	const q = await loadQuestion(questionId);
+	if (q.type === 'zone') return { text: null, zone: q.secret as ZoneSolution };
+	if (q.type !== 'list') return { text: solutionText(q.type, q.config, q.secret), zone: null };
 	const rows = await db
 		.select({ label: listItems.label })
 		.from(questionAnswers)
 		.innerJoin(listItems, eq(listItems.id, questionAnswers.itemId))
 		.where(eq(questionAnswers.questionId, questionId))
 		.orderBy(asc(listItems.label));
-	return rows.map((r) => r.label);
+	return { text: rows.map((r) => r.label).join(' · '), zone: null };
 }
 
 // ---------- Soumission ----------
 
 export type AnswerResult =
-	| { ok: true; correct: boolean; points: number; dryRun: boolean }
+	| { ok: true; score: number; points: number; dryRun: boolean }
 	| { ok: false; status: 400 | 403 | 404 | 409; error: string };
 
 /**
- * Enregistre la réponse d'un joueur (SPECS §7.3). `dryRun` (aperçu admin) : valide et calcule sans écrire.
- * L'heure qui compte est celle du serveur, jamais celle du client.
+ * Enregistre la réponse d'un joueur (SPECS §7.3), lue dans le formulaire selon le type de question.
+ * `dryRun` (aperçu admin) : valide et calcule sans écrire. L'heure qui compte est celle du serveur.
  */
 export async function submitAnswer(
 	user: { id: string; displayName: string },
 	date: string,
-	itemId: number,
+	fd: FormData,
 	opts: { dryRun: boolean }
 ): Promise<AnswerResult> {
 	const s = await getSettings();
@@ -107,29 +141,42 @@ export async function submitAnswer(
 	if (!opts.dryRun && day.opensAt > now) return { ok: false, status: 403, error: 'Cette case n’est pas encore ouverte.' };
 	if (!opts.dryRun && now >= eventEnd(s.endDate, s.timezone)) return { ok: false, status: 403, error: 'L’événement est terminé.' };
 
-	const q = await getQuestion(day.questionId);
-	if (!q.items.some((i) => i.id === itemId)) return { ok: false, status: 400, error: 'Choisis une réponse dans la liste.' };
-
-	const [{ n }] = await db
-		.select({ n: count() })
-		.from(questionAnswers)
-		.where(and(eq(questionAnswers.questionId, q.id), eq(questionAnswers.itemId, itemId)));
-	const correct = n > 0;
+	const q = await loadQuestion(day.questionId);
+	let score: number;
+	let itemId: number | null = null;
+	let value: unknown = null;
+	if (q.type === 'list') {
+		itemId = Number(fd.get('itemId'));
+		if (!q.items.some((i) => i.id === itemId)) return { ok: false, status: 400, error: 'Choisis une réponse dans la liste.' };
+		const [{ n }] = await db
+			.select({ n: count() })
+			.from(questionAnswers)
+			.where(and(eq(questionAnswers.questionId, q.id), eq(questionAnswers.itemId, itemId)));
+		score = n > 0 ? 1 : 0;
+	} else {
+		try {
+			({ score, value } = scoreAnswer(q.type, q.config, q.secret, fd));
+		} catch (e) {
+			if (e instanceof BadAnswer) return { ok: false, status: 400, error: e.message };
+			throw e;
+		}
+	}
 	// Aperçu d'une case pas encore ouverte : on simule une réponse à la seconde d'ouverture.
 	const early = day.opensAt > now;
 	const elapsedMs = early ? 0 : now.getTime() - day.opensAt.getTime();
-	const pts = points(correct, early || isSameDay(day.date, now, s.timezone), elapsedMs, s);
-	if (opts.dryRun) return { ok: true, correct, points: pts, dryRun: true };
+	const pts = points(score, early || isSameDay(day.date, now, s.timezone), elapsedMs, s);
+	if (opts.dryRun) return { ok: true, score, points: pts, dryRun: true };
 
 	// La clé primaire (user, question) EST la règle « une seule tentative » : pas de course possible.
+	const correct = score >= 1;
 	const inserted = await db
 		.insert(answers)
-		.values({ userId: user.id, questionId: q.id, itemId, isCorrect: correct, points: pts, elapsedMs })
+		.values({ userId: user.id, questionId: q.id, itemId, value, score, isCorrect: correct, points: pts, elapsedMs })
 		.onConflictDoNothing()
 		.returning({ points: answers.points });
 	if (inserted.length === 0) return { ok: false, status: 409, error: 'Tu as déjà répondu à cette quête.' };
 	onAnswer({ userId: user.id, name: user.displayName, questionId: q.id, points: pts, correct, elapsedMs });
-	return { ok: true, correct, points: pts, dryRun: false };
+	return { ok: true, score, points: pts, dryRun: false };
 }
 
 // ---------- Classement ----------

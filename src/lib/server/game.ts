@@ -3,11 +3,14 @@ import { localParts, zonedTime } from './tz';
 
 export type Scoring = { pointsCorrect: number; pointsCatchup: number; bonusMax: number; bonusMinutes: number };
 
-/** Points d'une réponse. Bonus de rapidité linéaire, de bonusMax à 0 sur bonusMinutes, le jour J seulement. */
-export function points(correct: boolean, sameDay: boolean, elapsedMs: number, s: Scoring): number {
-	if (!correct) return 0;
-	if (!sameDay) return s.pointsCatchup;
-	return s.pointsCorrect + bonusAt(elapsedMs, s);
+/**
+ * Points d'une réponse notée `score` (0 à 1 : estimation et ordre donnent des points partiels).
+ * Bonus de rapidité linéaire, de bonusMax à 0 sur bonusMinutes, le jour J seulement, au prorata du score.
+ */
+export function points(score: number, sameDay: boolean, elapsedMs: number, s: Scoring): number {
+	if (score <= 0) return 0;
+	if (!sameDay) return Math.round(score * s.pointsCatchup);
+	return Math.round(score * (s.pointsCorrect + bonusAt(elapsedMs, s)));
 }
 
 export function bonusAt(elapsedMs: number, s: Scoring): number {
@@ -20,22 +23,23 @@ export function eventEnd(endDate: string, timezone: string): Date {
 	return zonedTime(next, '00:00', timezone);
 }
 
-export type CellState = 'wrapped' | 'empty' | 'today' | 'catch' | 'ok' | 'ko' | 'closed';
+export type CellState = 'wrapped' | 'empty' | 'today' | 'catch' | 'ok' | 'part' | 'ko' | 'closed';
 
 /**
  * État d'une case pour un joueur.
  * - wrapped : pas encore ouverte ; empty : ouverte mais l'admin n'y a pas mis de quête
  * - today / catch : ouverte, pas répondue, le jour même / un jour passé (rattrapage)
- * - ok / ko : répondue ; closed : jamais répondue et l'événement est fini
+ * - ok / part / ko : répondue, parfaite / avec des points partiels / ratée
+ * - closed : jamais répondue et l'événement est fini
  */
 export function cellState(
 	day: { date: string; opensAt: Date; hasQuestion: boolean },
-	answer: { isCorrect: boolean } | null,
+	answer: { score: number } | null,
 	now: Date,
 	end: Date,
 	timezone: string
 ): CellState {
-	if (answer) return answer.isCorrect ? 'ok' : 'ko';
+	if (answer) return answer.score >= 1 ? 'ok' : answer.score > 0 ? 'part' : 'ko';
 	if (day.opensAt > now) return 'wrapped';
 	if (!day.hasQuestion) return 'empty';
 	if (now >= end) return 'closed';
