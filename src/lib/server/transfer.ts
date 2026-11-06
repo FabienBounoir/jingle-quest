@@ -5,8 +5,8 @@ import { answerLists, answers, days, db, listItems, questionAnswers, questions, 
 import { getSettings, invalidateSettings } from './settings';
 import { isValidTimeZone, localParts, zonedTime } from './tz';
 import { MAX_IMAGE_BYTES, MAX_LABEL, sniffImage } from './upload';
-import { parseAdmin } from './questionTypes';
-import { QUESTION_TYPES, type QuestionType } from './db/schema';
+import { parseAdmin, parseBlur, type TypedQuestion } from './questionTypes';
+import { LIST_TYPES, QUESTION_TYPES, type QuestionType } from './db/schema';
 
 export const FORMAT = 'jingle-quest/1';
 
@@ -90,9 +90,9 @@ export async function exportData(): Promise<ExportFile> {
 // ---------- Validation (pure, testée) ----------
 
 /** Reconstruit le formulaire admin d'une question typée à partir de l'export, pour la revalider. */
-function typedForm(type: Exclude<QuestionType, 'list'>, config: unknown, solution: unknown): FormData {
-	const c = (config ?? {}) as { options?: unknown[]; unit?: unknown; items?: unknown[] };
-	const sol = (solution ?? {}) as { correct?: unknown; value?: unknown; order?: unknown[]; x?: unknown; y?: unknown; w?: unknown; h?: unknown };
+function typedForm(type: TypedQuestion, config: unknown, solution: unknown): FormData {
+	const c = (config ?? {}) as { options?: unknown[]; unit?: unknown; items?: unknown[]; left?: unknown[]; right?: unknown[] };
+	const sol = (solution ?? {}) as { correct?: unknown; value?: unknown; order?: unknown[]; pairs?: unknown[]; x?: unknown; y?: unknown; w?: unknown; h?: unknown };
 	const fd = new FormData();
 	const add = (k: string, v: unknown) => fd.append(k, String(v ?? ''));
 	if (type === 'choice') {
@@ -103,6 +103,11 @@ function typedForm(type: Exclude<QuestionType, 'list'>, config: unknown, solutio
 		add('unit', c.unit);
 	} else if (type === 'order') {
 		for (const i of sol.order ?? []) add('item', (c.items ?? [])[Number(i)]);
+	} else if (type === 'match') {
+		(c.left ?? []).forEach((l, i) => {
+			add('left', l);
+			add('right', (c.right ?? [])[Number((sol.pairs ?? [])[i])]);
+		});
 	} else {
 		add('zx', sol.x);
 		add('zy', sol.y);
@@ -177,18 +182,29 @@ export function parseExport(raw: unknown) {
 		if (q.day !== null && (!dates.has(q.day) || usedDays.has(q.day))) throw new ImportError(`${where} : jour ${q.day} inconnu ou déjà pris.`);
 		if (q.day) usedDays.add(q.day);
 		const img = image(q.image, where);
-		if (type === 'list') {
+		if (LIST_TYPES.includes(type)) {
+			let config: object = {};
+			if (type === 'blur') {
+				if (!img) throw new ImportError(`${where} : une photo qui se dévoile a besoin de son image.`);
+				try {
+					const fd = new FormData();
+					fd.append('minutes', String((q.config as { minutes?: unknown })?.minutes ?? ''));
+					config = parseBlur(fd);
+				} catch (e) {
+					throw new ImportError(`${where} : ${e instanceof Error ? e.message : 'réglages invalides'}`);
+				}
+			}
 			const items = q.list ? lists.get(q.list) : undefined;
 			if (!items) throw new ImportError(`${where} : liste « ${q.list} » absente du fichier.`);
 			if (!Array.isArray(q.correct) || q.correct.length === 0 || !q.correct.every((c) => items.has(c)))
 				throw new ImportError(`${where} : bonnes réponses absentes de la liste « ${q.list} ».`);
-			return { type, text: q.text, list: q.list, correct: q.correct, config: {}, solution: {}, day: q.day, image: img };
+			return { type, text: q.text, list: q.list, correct: q.correct, config, solution: {}, day: q.day, image: img };
 		}
 		if (type === 'zone' && !img) throw new ImportError(`${where} : une zone a besoin de son image.`);
 		// On repasse par la validation du formulaire admin : un fichier ne peut rien introduire qu'un
 		// admin n'aurait pas pu saisir (l'ordre est remélangé au passage).
 		try {
-			const typed = parseAdmin(type, typedForm(type, q.config, q.solution));
+			const typed = parseAdmin(type as TypedQuestion, typedForm(type as TypedQuestion, q.config, q.solution));
 			return { type, text: q.text, list: null, correct: [], ...typed, day: q.day, image: img };
 		} catch (e) {
 			throw new ImportError(`${where} : ${e instanceof Error ? e.message : 'réglages invalides'}`);
@@ -245,7 +261,7 @@ export async function importData(raw: unknown): Promise<{ lists: number; questio
 					imageMime: q.image?.mime ?? null
 				})
 				.returning({ id: questions.id });
-			if (q.type === 'list')
+			if (LIST_TYPES.includes(q.type))
 				await tx.insert(questionAnswers).values(q.correct.map((c) => ({ questionId: row.id, itemId: itemIds.get(`${q.list}\u0000${c}`)! })));
 			if (q.day) questionOfDay.set(q.day, row.id);
 		}

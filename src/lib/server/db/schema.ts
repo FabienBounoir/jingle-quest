@@ -58,8 +58,13 @@ export const listItems = pgTable(
 	(t) => [unique().on(t.listId, t.label)]
 );
 
-/** list (autocomplétion dans une liste), choice (QCM), number (estimation), order (remettre dans l'ordre), zone (clic sur l'image). */
-export const QUESTION_TYPES = ['list', 'choice', 'number', 'order', 'zone'] as const;
+/**
+ * list (autocomplétion dans une liste), choice (QCM), number (estimation), order (remettre dans l'ordre),
+ * zone (clic sur l'image), match (associer deux colonnes), blur (photo qui se dévoile + réponse dans une liste).
+ */
+export const QUESTION_TYPES = ['list', 'choice', 'number', 'order', 'zone', 'match', 'blur'] as const;
+/** Types dont la réponse se choisit dans une liste (bonnes réponses dans question_answers). */
+export const LIST_TYPES: readonly QuestionType[] = ['list', 'blur'];
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 export const questions = pgTable(
@@ -68,7 +73,7 @@ export const questions = pgTable(
 		id: serial('id').primaryKey(),
 		type: text('type').$type<QuestionType>().notNull().default('list'),
 		text: text('text').notNull(),
-		/** Type « list » uniquement (ses bonnes réponses sont dans question_answers). */
+		/** Types « list » et « blur » uniquement (leurs bonnes réponses sont dans question_answers). */
 		listId: integer('list_id').references(() => answerLists.id),
 		image: bytea('image'),
 		imageMime: text('image_mime'),
@@ -77,7 +82,7 @@ export const questions = pgTable(
 		/** La solution des types hors « list ». Ne quitte JAMAIS le serveur avant la fin de l'événement. */
 		solution: jsonb('solution').notNull().default({})
 	},
-	(t) => [check('questions_type', sql`${t.type} in ('list', 'choice', 'number', 'order', 'zone')`)]
+	(t) => [check('questions_type', sql`${t.type} in ('list', 'choice', 'number', 'order', 'zone', 'match', 'blur')`)]
 );
 
 /** Bonnes réponses d'une question (une ou plusieurs valeurs de sa liste). */

@@ -11,7 +11,9 @@
 		{ id: 'choice', label: 'QCM', hint: '2 à 6 propositions à cliquer' },
 		{ id: 'number', label: 'Estimation', hint: 'un nombre, points selon la proximité' },
 		{ id: 'order', label: 'Ordre', hint: '3 à 5 éléments à remettre dans l’ordre' },
-		{ id: 'zone', label: 'Zone', hint: 'cliquer au bon endroit sur l’image' }
+		{ id: 'zone', label: 'Zone', hint: 'cliquer au bon endroit sur l’image' },
+		{ id: 'match', label: 'Associer', hint: '3 à 5 paires à relier' },
+		{ id: 'blur', label: 'Photo floue', hint: 'une photo pixellisée qui se précise ; réponse dans une liste' }
 	] as const;
 
 	const q = $derived(data.question);
@@ -25,8 +27,8 @@
 	let filter = $state('');
 
 	// Autres types : état initialisé depuis la config et la solution enregistrées.
-	type Cfg = { options?: string[]; unit?: string; items?: string[] };
-	type Sol = { correct?: number; value?: number; order?: number[]; x?: number; y?: number; w?: number; h?: number };
+	type Cfg = { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[]; minutes?: number };
+	type Sol = { correct?: number; value?: number; order?: number[]; pairs?: number[]; x?: number; y?: number; w?: number; h?: number };
 	// svelte-ignore state_referenced_locally
 	const cfg0 = (data.question?.config ?? {}) as Cfg;
 	// svelte-ignore state_referenced_locally
@@ -40,6 +42,10 @@
 	let unit = $state(cfg0.unit ?? '');
 	// Les éléments sont saisis dans le BON ordre ; le serveur les mélange pour l'affichage joueur.
 	let orderItems = $state(pad(sol0.order && cfg0.items ? sol0.order.map((i) => cfg0.items![i]) : [], 5));
+	// Associer : saisi par paires (gauche → droite), le serveur mélange la colonne de droite.
+	let matchLeft = $state(pad(cfg0.left ?? [], 5));
+	let matchRight = $state(pad(cfg0.left && cfg0.right && sol0.pairs ? cfg0.left.map((_, i) => cfg0.right![sol0.pairs![i]]) : [], 5));
+	let blurMinutes = $state(cfg0.minutes ?? 60);
 	let zone = $state(sol0.x !== undefined ? { x: sol0.x, y: sol0.y!, w: sol0.w!, h: sol0.h! } : null);
 	let newImage = $state<string | null>(null);
 	const imageSrc = $derived(newImage ?? (data.question?.hasImage ? `/img/q/${data.question.id}` : null));
@@ -49,7 +55,8 @@
 		newImage = f ? URL.createObjectURL(f) : null;
 		if (f && type === 'zone') zone = null; // nouvelle image : la zone est à redessiner
 	}
-	const canSave = $derived(type !== 'list' || selected.length > 0);
+	const listLike = $derived(type === 'list' || type === 'blur');
+	const canSave = $derived(!listLike || selected.length > 0);
 
 
 	const list = $derived(data.lists.find((l) => l.id === listId));
@@ -114,16 +121,23 @@
 			</label>
 
 			<div class="field">
-				<span>{type === 'zone' ? 'l’image (obligatoire)' : 'une image ? (optionnel)'}</span>
+				<span>{type === 'zone' || type === 'blur' ? 'l’image (obligatoire)' : 'une image ? (optionnel)'}</span>
 				<div class="row">
 					{#if imageSrc && type !== 'zone'}<img src={imageSrc} alt="Visuel actuel de la question" class="thumb" />{/if}
-					<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" onchange={pickImage} disabled={locked && type === 'zone'} />
-					{#if q?.hasImage && type !== 'zone'}<label class="check"><input type="checkbox" name="removeImage" /> retirer l'image</label>{/if}
+					<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" onchange={pickImage} disabled={locked && (type === 'zone' || type === 'blur')} />
+					{#if q?.hasImage && type !== 'zone' && type !== 'blur'}<label class="check"><input type="checkbox" name="removeImage" /> retirer l'image</label>{/if}
 				</div>
 				<p class="muted">JPG, PNG, WebP ou GIF, 2 Mo maximum. Visible par les joueurs seulement à l'ouverture.</p>
 			</div>
 
-			{#if type === 'list'}
+			{#if type === 'blur'}
+				<label class="field">
+					<span>nette au bout de (minutes)</span>
+					<input type="number" name="minutes" min="1" max="1440" bind:value={blurMinutes} readonly={locked} />
+				</label>
+				<p class="muted">6 étapes, de très pixellisée à nette. Conseil : la même durée que le bonus de rapidité, pour que répondre tôt rapporte plus.</p>
+			{/if}
+			{#if listLike}
 			<div class="field">
 					<span id="list-label">réponses possibles depuis la liste…</span>
 					<div class="row" role="radiogroup" aria-labelledby="list-label">
@@ -143,7 +157,7 @@
 			{#if locked}
 				<p class="notice error">{q?.answered} joueur(s) ont déjà répondu : le type et la solution sont figés.</p>
 			{/if}
-			{#if type === 'list'}
+			{#if listLike}
 			{#if data.lists.length === 0}
 				<h2 id="ok-title">Bonnes réponses</h2>
 				<p>Il faut d'abord une liste de réponses (par exemple « Collaborateurs »).</p>
@@ -215,6 +229,17 @@
 					</div>
 				{/each}
 				<p class="muted">Les joueurs les verront mélangés. Points selon le nombre d'éléments à la bonne place.</p>
+			{:else if type === 'match'}
+				<h2 id="ok-title">Les paires</h2>
+				<p class="hand" style="margin: 0">3 à 5 paires justes, la colonne de droite sera mélangée</p>
+				{#each matchLeft as _, i (i)}
+					<div class="opt-row pair">
+						<input type="text" name="left" bind:value={matchLeft[i]} maxlength="120" placeholder="Gauche {i + 1}{i < 3 ? '' : ' (opt.)'}" aria-label="Élément de gauche {i + 1}" readonly={locked} />
+						<span aria-hidden="true">→</span>
+						<input type="text" name="right" bind:value={matchRight[i]} maxlength="120" placeholder="Droite {i + 1}{i < 3 ? '' : ' (opt.)'}" aria-label="Élément associé à gauche {i + 1}" readonly={locked} />
+					</div>
+				{/each}
+				<p class="muted">Points selon le nombre de paires justes.</p>
 			{:else if type === 'zone'}
 				<h2 id="ok-title">La bonne zone</h2>
 				<ZoneEditor src={imageSrc} bind:rect={zone} disabled={locked} />
@@ -260,6 +285,7 @@
 	.type input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 	.opt-row { display: flex; align-items: center; gap: 10px; }
 	.opt-row input[type='radio'] { width: 24px; height: 24px; flex: none; accent-color: var(--green-dark); }
+	.pair span { font: 700 18px var(--font-title); }
 	.rank { width: 32px; height: 32px; flex: none; border: 3px solid var(--ink); border-radius: 50%; background: var(--gold); display: flex; align-items: center; justify-content: center; font: 700 15px var(--font-title); }
 	.danger-zone { justify-content: space-between; padding: 14px 20px; }
 </style>

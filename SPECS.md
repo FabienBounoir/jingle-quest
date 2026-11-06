@@ -48,8 +48,10 @@ On en fait **un template** : rien n'est propre à Sopra Steria dans le code. Nom
 | Estimation | un nombre (unité optionnelle) | pile à 1 % = 100 %, à 10 % = 70 %, à 25 % = 40 % |
 | Ordre | 3 à 5 éléments à classer avec ↑ ↓ | part des éléments à la bonne place |
 | Zone | un clic sur l'image, l'admin a dessiné un rectangle | dedans = juste |
+| Associer | 3 à 5 paires, un menu déroulant par ligne (colonne de droite mélangée) | part des paires justes |
+| Photo floue | photo pixellisée qui se précise en 6 étapes sur une durée réglable, réponse dans une liste | juste ou faux (le bonus récompense qui répond tôt) |
 
-Les points partiels s'appliquent au barème complet, bonus de rapidité compris. La solution est stockée à part (`questions.solution`) et n'est jamais envoyée au navigateur avant la fin. Les éléments à ordonner sont mélangés à l'enregistrement, donc l'ordre affiché ne trahit rien. Code : `src/lib/server/questionTypes.ts`.
+Les points partiels s'appliquent au barème complet, bonus de rapidité compris. La solution est stockée à part (`questions.solution`) et n'est jamais envoyée au navigateur avant la fin. Les éléments à ordonner sont mélangés à l'enregistrement, donc l'ordre affiché ne trahit rien. Code : `src/lib/server/questionTypes.ts`. La photo floue est pixellisée **côté serveur** (`src/lib/server/blur.ts`, sharp) selon le temps écoulé depuis l'ouverture : le navigateur ne reçoit jamais la version nette avant la fin de la durée.
 
 ### 3.3 Listes de réponses
 

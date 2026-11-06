@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BadAnswer, answerText, numberScore, parseAdmin, sameOrderQuestion, scoreAnswer, shuffledOrder, solutionText, type OrderConfig, type OrderSolution } from './questionTypes';
+import { BadAnswer, answerText, numberScore, parseAdmin, parseBlur, sameShuffledQuestion, scoreAnswer, shuffledOrder, solutionText, type MatchConfig, type MatchSolution, type OrderConfig, type OrderSolution } from './questionTypes';
 
 const form = (entries: [string, string][]) => {
 	const fd = new FormData();
@@ -61,8 +61,8 @@ describe('Remettre dans l’ordre', () => {
 	});
 	it('reconnaît une question inchangée malgré un autre mélange', () => {
 		const items = [['item', 'A'], ['item', 'B'], ['item', 'C']] as [string, string][];
-		expect(sameOrderQuestion(parseAdmin('order', form(items)), parseAdmin('order', form(items)))).toBe(true);
-		expect(sameOrderQuestion(parseAdmin('order', form(items)), parseAdmin('order', form([...items].reverse())))).toBe(false);
+		expect(sameShuffledQuestion('order', parseAdmin('order', form(items)), parseAdmin('order', form(items)))).toBe(true);
+		expect(sameShuffledQuestion('order', parseAdmin('order', form(items)), parseAdmin('order', form([...items].reverse())))).toBe(false);
 	});
 });
 
@@ -74,5 +74,40 @@ describe('Zone', () => {
 		expect(() => scoreAnswer('zone', q.config, q.solution, form([['x', '2'], ['y', '0.4']]))).toThrow(BadAnswer);
 		expect(() => scoreAnswer('zone', q.config, q.solution, form([]))).toThrow(BadAnswer);
 		expect(() => parseAdmin('zone', form([['zx', '0.9'], ['zy', '0'], ['zw', '0.5'], ['zh', '0.5']]))).toThrow(/rectangle/);
+	});
+});
+
+describe('Associer', () => {
+	const rows: [string, string][] = [['left', 'Julien'], ['right', 'Lyon'], ['left', 'Inès'], ['right', 'Nantes'], ['left', 'Hugo'], ['right', 'Lille'], ['left', ''], ['right', '']];
+	it('mélange la colonne de droite et note les paires justes', () => {
+		const q = parseAdmin('match', form(rows));
+		const c = q.config as MatchConfig;
+		const sol = q.solution as MatchSolution;
+		expect(c.left).toEqual(['Julien', 'Inès', 'Hugo']);
+		expect(c.right).not.toEqual(['Lyon', 'Nantes', 'Lille']);
+		expect(sol.pairs.map((j, i) => `${c.left[i]}=${c.right[j]}`)).toEqual(['Julien=Lyon', 'Inès=Nantes', 'Hugo=Lille']);
+		const perfect = sol.pairs.map(String).map((v) => ['pair', v] as [string, string]);
+		expect(scoreAnswer('match', c, sol, form(perfect)).score).toBe(1);
+		const swapped = [sol.pairs[1], sol.pairs[0], sol.pairs[2]].map((v) => ['pair', String(v)] as [string, string]);
+		expect(scoreAnswer('match', c, sol, form(swapped)).score).toBeCloseTo(1 / 3);
+		expect(() => scoreAnswer('match', c, sol, form([['pair', '0'], ['pair', '0'], ['pair', '1']]))).toThrow(/qu’une fois/);
+		expect(() => scoreAnswer('match', c, sol, form([['pair', '0'], ['pair', '']]))).toThrow(BadAnswer);
+		expect(solutionText('match', c, sol)).toBe('Julien → Lyon · Inès → Nantes · Hugo → Lille');
+		expect(answerText('match', c, { pairs: swapped.map(([, v]) => Number(v)) })).toContain('Julien → Nantes');
+	});
+	it('refuse une ligne à moitié remplie, trop peu de paires ou des doublons', () => {
+		expect(() => parseAdmin('match', form([...rows.slice(0, 6), ['left', 'Nina'], ['right', '']]))).toThrow(/deux éléments/);
+		expect(() => parseAdmin('match', form(rows.slice(0, 4)))).toThrow(/entre 3 et 5/);
+		expect(() => parseAdmin('match', form([...rows.slice(0, 4), ['left', 'Hugo'], ['right', 'lyon']]))).toThrow(/identiques/);
+	});
+	it('reconnaît une association inchangée malgré un autre mélange', () => {
+		expect(sameShuffledQuestion('match', parseAdmin('match', form(rows)), parseAdmin('match', form(rows)))).toBe(true);
+	});
+});
+
+describe('Photo qui se dévoile', () => {
+	it('valide la durée', () => {
+		expect(parseBlur(form([['minutes', '30']]))).toEqual({ minutes: 30 });
+		expect(() => parseBlur(form([['minutes', '0']]))).toThrow(BadAnswer);
 	});
 });

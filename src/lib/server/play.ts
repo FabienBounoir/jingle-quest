@@ -2,8 +2,8 @@
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { answerLists, answers, days, db, listItems, questionAnswers, questions, users } from '$lib/server/db';
 import { eventEnd, isSameDay, points } from './game';
-import { BadAnswer, answerText, scoreAnswer, solutionText, type ZoneSolution } from './questionTypes';
-import type { QuestionType } from './db/schema';
+import { BadAnswer, answerText, scoreAnswer, solutionText, type TypedQuestion, type ZoneSolution } from './questionTypes';
+import { LIST_TYPES, type QuestionType } from './db/schema';
 import { getAnswered, getRanking, onAnswer } from './live';
 import { getSettings } from './settings';
 
@@ -51,7 +51,7 @@ function loadQuestion(id: number): Promise<CachedQuestion> {
 				.where(eq(questions.id, id));
 			if (!q) throw new Error(`question ${id} introuvable`);
 			const items =
-				q.type === 'list' && q.listId
+				LIST_TYPES.includes(q.type) && q.listId
 					? await db.select({ id: listItems.id, label: listItems.label }).from(listItems).where(eq(listItems.listId, q.listId)).orderBy(asc(listItems.label))
 					: [];
 			return { id: q.id, type: q.type, text: q.text, hasImage: q.mime !== null, listName: q.listName, items, config: q.config, secret: q.solution };
@@ -98,8 +98,8 @@ export const answeredCount = getAnswered;
 
 /** La réponse d'un joueur, en texte (zone : null, elle se dessine sur l'image). */
 export function myAnswerText(q: QuestionPayload, a: { itemId: number | null; value: unknown }): string | null {
-	if (q.type === 'list') return q.items.find((i) => i.id === a.itemId)?.label ?? '?';
-	return answerText(q.type, q.config, a.value);
+	if (LIST_TYPES.includes(q.type)) return q.items.find((i) => i.id === a.itemId)?.label ?? '?';
+	return answerText(q.type as TypedQuestion, q.config, a.value);
 }
 
 /**
@@ -108,7 +108,7 @@ export function myAnswerText(q: QuestionPayload, a: { itemId: number | null; val
 export async function reveal(questionId: number): Promise<{ text: string | null; zone: ZoneSolution | null }> {
 	const q = await loadQuestion(questionId);
 	if (q.type === 'zone') return { text: null, zone: q.secret as ZoneSolution };
-	if (q.type !== 'list') return { text: solutionText(q.type, q.config, q.secret), zone: null };
+	if (!LIST_TYPES.includes(q.type)) return { text: solutionText(q.type as TypedQuestion, q.config, q.secret), zone: null };
 	const rows = await db
 		.select({ label: listItems.label })
 		.from(questionAnswers)
@@ -145,7 +145,7 @@ export async function submitAnswer(
 	let score: number;
 	let itemId: number | null = null;
 	let value: unknown = null;
-	if (q.type === 'list') {
+	if (LIST_TYPES.includes(q.type)) {
 		itemId = Number(fd.get('itemId'));
 		if (!q.items.some((i) => i.id === itemId)) return { ok: false, status: 400, error: 'Choisis une réponse dans la liste.' };
 		const [{ n }] = await db
@@ -155,7 +155,7 @@ export async function submitAnswer(
 		score = n > 0 ? 1 : 0;
 	} else {
 		try {
-			({ score, value } = scoreAnswer(q.type, q.config, q.secret, fd));
+			({ score, value } = scoreAnswer(q.type as TypedQuestion, q.config, q.secret, fd));
 		} catch (e) {
 			if (e instanceof BadAnswer) return { ok: false, status: 400, error: e.message };
 			throw e;

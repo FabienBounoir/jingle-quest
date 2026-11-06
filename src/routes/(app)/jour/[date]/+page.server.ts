@@ -43,6 +43,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		scoring: { pointsCorrect: s.pointsCorrect, pointsCatchup: s.pointsCatchup, bonusMax: s.bonusMax, bonusMinutes: s.bonusMinutes },
 		bonusNow: sameDay ? bonusAt(now.getTime() - day.opensAt.getTime(), s) : 0,
 		bonusEndsAt: day.opensAt.getTime() + s.bonusMinutes * 60_000,
+		opensAt: day.opensAt.getTime(),
 		serverNow: now.getTime()
 	};
 };

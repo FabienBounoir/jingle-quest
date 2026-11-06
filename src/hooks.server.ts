@@ -1,6 +1,7 @@
 import { error, redirect, type Handle } from '@sveltejs/kit';
 import { SESSION_COOKIE, deleteSessionCookie, setSessionCookie, validateSession } from '$lib/server/auth/session';
 import { isAdmin } from '$lib/server/config';
+import { invalidateBlur } from '$lib/server/blur';
 import { refreshSchedule } from '$lib/server/live';
 import { invalidateQuestions } from '$lib/server/play';
 
@@ -38,6 +39,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// plutôt que dans chaque action.
 	if (path.startsWith('/admin') && event.request.method === 'POST') {
 		invalidateQuestions();
+		invalidateBlur(); // une image ou une durée de dévoilement a pu changer
 		refreshSchedule(); // heures d'ouverture, exclusions, quêtes rattachées
 	}
 	return response;

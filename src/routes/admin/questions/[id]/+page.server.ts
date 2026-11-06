@@ -6,8 +6,8 @@ import { BadInput, file, guard, int, str } from '$lib/server/form';
 import { getSettings } from '$lib/server/settings';
 import { localParts } from '$lib/server/tz';
 import { MAX_IMAGE_BYTES, sniffImage } from '$lib/server/upload';
-import { BadAnswer, parseAdmin, sameOrderQuestion } from '$lib/server/questionTypes';
-import { QUESTION_TYPES, type QuestionType } from '$lib/server/db';
+import { BadAnswer, parseAdmin, parseBlur, sameShuffledQuestion, type TypedQuestion } from '$lib/server/questionTypes';
+import { LIST_TYPES, QUESTION_TYPES, type QuestionType } from '$lib/server/db';
 
 /** 'new' → null, sinon l'id numérique. */
 function parseId(raw: string): number | null {
@@ -75,7 +75,15 @@ export const actions: Actions = {
 			let listId: number | null = null;
 			let correct: number[] = [];
 			let typed = { config: {} as unknown, solution: {} as unknown };
-			if (type === 'list') {
+			if (LIST_TYPES.includes(type)) {
+				if (type === 'blur') {
+					try {
+						typed = { config: parseBlur(fd), solution: {} };
+					} catch (e) {
+						if (e instanceof BadAnswer) throw new BadInput(e.message);
+						throw e;
+					}
+				}
 				listId = int(fd, 'listId', { min: 1, max: 2 ** 31 - 1, label: 'Liste de réponses' });
 				correct = [...new Set(fd.getAll('correct').map(Number))].filter(Number.isInteger);
 				if (correct.length === 0) throw new BadInput('Choisis au moins une bonne réponse.');
@@ -86,7 +94,7 @@ export const actions: Actions = {
 				if (valid.length !== correct.length) throw new BadInput('Les bonnes réponses doivent venir de la liste choisie.');
 			} else {
 				try {
-					typed = parseAdmin(type, fd);
+					typed = parseAdmin(type as TypedQuestion, fd);
 				} catch (e) {
 					if (e instanceof BadAnswer) throw new BadInput(e.message);
 					throw e;
@@ -101,7 +109,7 @@ export const actions: Actions = {
 				if (!mime) throw new BadInput('Image : JPG, PNG, WebP ou GIF uniquement.');
 				imagePatch = { image, imageMime: mime };
 			} else if (fd.get('removeImage') === 'on') {
-				if (type === 'zone') throw new BadInput("Une question « zone » a besoin de son image.");
+				if (type === 'zone' || type === 'blur') throw new BadInput('Ce type de question a besoin de son image.');
 				imagePatch = { image: null, imageMime: null };
 			}
 
@@ -114,9 +122,9 @@ export const actions: Actions = {
 								.from(questions)
 								.where(eq(questions.id, id));
 				if (id !== null && !cur) throw new BadInput('Question introuvable.');
-				if (type === 'zone' && !image && !cur?.mime) throw new BadInput("Une question « zone » a besoin d'une image.");
-				// Ordre inchangé : on garde le mélange déjà enregistré au lieu d'en tirer un nouveau à chaque sauvegarde.
-				if (type === 'order' && cur?.type === 'order' && sameOrderQuestion(cur, typed)) typed = { config: cur.config, solution: cur.solution };
+				if ((type === 'zone' || type === 'blur') && !image && !cur?.mime) throw new BadInput('Ce type de question a besoin d’une image.');
+				// Ordre ou association inchangés : on garde le mélange déjà enregistré au lieu d'en tirer un nouveau.
+				if (cur?.type === type && sameShuffledQuestion(type, cur, typed)) typed = { config: cur.config, solution: cur.solution };
 
 				if (id !== null && cur) {
 					// Des joueurs ont déjà répondu : changer le type, la solution ou l'image d'une zone fausserait
@@ -133,8 +141,8 @@ export const actions: Actions = {
 							curCorrect !== [...correct].sort().join() ||
 							JSON.stringify(cur.config) !== JSON.stringify(typed.config) ||
 							JSON.stringify(cur.solution) !== JSON.stringify(typed.solution) ||
-							(type === 'zone' && imagePatch !== undefined);
-						if (changed) throw new BadInput(`${n} joueur(s) ont déjà répondu : le type, la solution et l'image d'une zone sont figés.`);
+							((type === 'zone' || type === 'blur') && imagePatch !== undefined);
+						if (changed) throw new BadInput(`${n} joueur(s) ont déjà répondu : le type, la solution et l'image (zone, photo) sont figés.`);
 					}
 				}
 

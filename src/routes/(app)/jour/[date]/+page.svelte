@@ -5,6 +5,8 @@
 	import NumberInput from '$lib/components/answers/NumberInput.svelte';
 	import OrderInput from '$lib/components/answers/OrderInput.svelte';
 	import ZoneInput from '$lib/components/answers/ZoneInput.svelte';
+	import MatchInput from '$lib/components/answers/MatchInput.svelte';
+	import BlurImage from '$lib/components/BlurImage.svelte';
 	import { serverClock } from '$lib/clock.svelte';
 	import { dayLabel } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
@@ -16,8 +18,8 @@
 	let ready = $state(false); // autres types : le composant de saisie dit si la réponse est complète
 	let sending = $state(false);
 	const q = $derived(data.question);
-	const cfg = $derived(q.config as { options?: string[]; unit?: string; items?: string[] });
-	const canSubmit = $derived(q.type === 'list' ? value !== null : ready);
+	const cfg = $derived(q.config as { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[]; minutes?: number });
+	const canSubmit = $derived(q.type === 'list' || q.type === 'blur' ? value !== null : ready);
 	const imgSrc = $derived(`/img/q/${q.id}`);
 	const zonePoint = $derived(data.myAnswer?.value as { x: number; y: number } | null | undefined);
 	const verdict = $derived(!data.myAnswer ? null : data.myAnswer.score >= 1 ? 'ok' : data.myAnswer.score > 0 ? 'part' : 'ko');
@@ -50,7 +52,9 @@
 
 	<section class="card main" aria-labelledby="q">
 		<!-- Zone : l'image EST le champ de réponse (ou le support du résultat), on ne l'affiche pas deux fois. -->
-		{#if q.hasImage && q.type !== 'zone'}
+		{#if q.type === 'blur' && q.hasImage}
+			<BlurImage id={q.id} opensAt={data.opensAt} minutes={cfg.minutes ?? 60} serverNow={data.serverNow} ended={data.ended} />
+		{:else if q.hasImage && q.type !== 'zone'}
 			<img src={imgSrc} alt="Illustration de la question" class="qimg" />
 		{/if}
 		<h2 id="q">{q.text}</h2>
@@ -98,7 +102,7 @@
 					};
 				}}
 			>
-				{#if q.type === 'list'}
+				{#if q.type === 'list' || q.type === 'blur'}
 					<Combobox items={q.items} bind:value id="answer" label="ta réponse · {q.listName} :" />
 					<input type="hidden" name="itemId" value={value ?? ''} />
 				{:else if q.type === 'choice'}
@@ -109,6 +113,8 @@
 					<OrderInput items={cfg.items ?? []} bind:ready />
 				{:else if q.type === 'zone'}
 					<ZoneInput src={imgSrc} bind:ready />
+				{:else if q.type === 'match'}
+					<MatchInput left={cfg.left ?? []} right={cfg.right ?? []} bind:ready />
 				{/if}
 
 				{#if error}<p class="notice error" role="alert">{error}</p>{/if}
@@ -120,7 +126,7 @@
 
 				<div class="submit">
 					<div class="gain">
-						<span>{q.type === 'number' || q.type === 'order' ? 'jusqu’à' : 'si c’est juste :'} <strong>{potential} pts</strong>{data.sameDay ? '' : ' (rattrapage)'}</span>
+						<span>{q.type === 'number' || q.type === 'order' || q.type === 'match' ? 'jusqu’à' : 'si c’est juste :'} <strong>{potential} pts</strong>{data.sameDay ? '' : ' (rattrapage)'}</span>
 						{#if bonusLeft > 0}
 							<div class="bar"><div style:width="{(bonusLeft / (data.scoring.bonusMinutes * 60_000)) * 100}%"></div></div>
 						{/if}
