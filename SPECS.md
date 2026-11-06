@@ -343,7 +343,7 @@ src/
   hooks.server.ts              session → locals.user, locals.isAdmin (ADMIN_EMAILS)
   service-worker.ts            push uniquement (affiche la notif, ouvre /)
   lib/server/
-    config.ts                  env validé par zod
+    config.ts                  lecture de l'env (rien de propre à une entreprise)
     db/index.ts, db/schema.ts
     auth/oidc.ts               copié de rae, + claim `name` → display_name
     auth/session.ts, tokens.ts copiés de rae (sans workspace)

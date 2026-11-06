@@ -1,0 +1,31 @@
+# Construit l'image dans OpenShift à partir du Dockerfile du dépôt (oc start-build jingle-quest).
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: jingle-quest
+  labels: { app: jingle-quest }
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/FabienBounoir/jingle-quest.git
+      ref: main
+    # Dépôt privé : secret basic-auth avec un token GitHub en lecture seule (voir README.md).
+    # À retirer si le dépôt devient public.
+    sourceSecret:
+      name: jingle-quest-git
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  # Sans ce bloc, le pod de build hérite du défaut du namespace et rampe pendant npm ci / vite build.
+  # 1000m : app (1500m) + db (1000m) + build (1000m) = 3,5 cœurs, sous le quota de 4.
+  resources:
+    requests: { cpu: 500m, memory: 768Mi }
+    limits: { cpu: 1000m, memory: 1536Mi }
+  output:
+    to:
+      kind: ImageStreamTag
+      name: jingle-quest:latest
+  triggers:
+    - type: ConfigChange

@@ -1,0 +1,13 @@
+# Configuration non sensible. Liste complète et description : .env.example à la racine.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jingle-quest-config
+  labels: { app: jingle-quest }
+data:
+  # Host de la Route une fois créée (oc get route jingle-quest -o jsonpath='{.spec.host}').
+  ORIGIN: 'https://CHANGEME-route-host'
+  # Vide = tout compte que l'IdP authentifie. Ex. 'monentreprise.com,filiale.com'
+  ALLOWED_EMAIL_DOMAINS: ''
+  ADMIN_EMAILS: 'CHANGEME@exemple.com'
+  VAPID_SUBJECT: 'mailto:CHANGEME@exemple.com'

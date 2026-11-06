@@ -1,0 +1,12 @@
+# oc apply -k openshift/   (après avoir créé les deux secrets à la main, voir README.md)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - imagestream.yaml
+  - buildconfig.yaml
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+  - route.yaml
+  - db-statefulset.yaml
+# secret.yaml et db-secret.yaml ne sont PAS listés : ce sont des modèles, jamais appliqués tels quels.

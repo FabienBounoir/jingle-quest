@@ -1,0 +1,32 @@
+# Dev local : Postgres + un faux fournisseur OIDC pour tester le vrai flux SSO sans Entra.
+#   docker compose up -d     puis   npm run db:migrate && npm run dev
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: jq-db
+    environment:
+      POSTGRES_USER: jq
+      POSTGRES_PASSWORD: jq
+      POSTGRES_DB: jq
+    ports:
+      - '5433:5432' # 5433 : ne pas entrer en conflit avec un autre Postgres local
+    volumes:
+      - jq-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jq']
+      interval: 5s
+      retries: 10
+
+  # Faux IdP : page de login où l'on tape n'importe quel email (voir README, « SSO en local »).
+  # Issuer : http://localhost:8080/jq — accepte n'importe quel client_id / client_secret.
+  oidc:
+    image: ghcr.io/navikt/mock-oauth2-server:2.1.10
+    container_name: jq-oidc
+    ports:
+      - '8080:8080'
+    environment:
+      JSON_CONFIG: >-
+        {"interactiveLogin": true, "httpServer": "NettyWrapper"}
+
+volumes:
+  jq-pgdata:

@@ -1,0 +1,19 @@
+# Pas de spec.host : OpenShift génère un sous-domaine. Reporter ce host dans ORIGIN (configmap.yaml).
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: jingle-quest
+  labels: { app: jingle-quest }
+  annotations:
+    # Connexions SSE longues (/api/events) : sans ça le routeur HAProxy les coupe à 30 s.
+    # Un heartbeat part toutes les 25 s côté serveur (SPECS §7.4).
+    haproxy.router.openshift.io/timeout: 1h
+spec:
+  to:
+    kind: Service
+    name: jingle-quest
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

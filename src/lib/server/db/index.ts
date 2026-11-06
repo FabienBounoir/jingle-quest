@@ -1,0 +1,11 @@
+import { env } from '$env/dynamic/private';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import * as schema from './schema';
+
+if (!env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
+
+// 10 connexions suffisent largement : le pic (≈2 000 réponses à 9h) reste quelques dizaines de req/s.
+export const sql = postgres(env.DATABASE_URL, { max: 10 });
+export const db = drizzle(sql, { schema });
+export * from './schema';

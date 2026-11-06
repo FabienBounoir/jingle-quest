@@ -1,0 +1,78 @@
+# Repris de rae. PostgreSQL pour l'environnement OpenShift. Utilise l'image Red Hat "registry.redhat.io/
+# rhel9/postgresql-16" (pas postgres:16-alpine comme en local) : cette image est conçue pour
+# tourner sous l'UID arbitraire / groupe 0 imposé par la SCC "restricted" par défaut d'OpenShift,
+# contrairement à l'image Docker Hub officielle dont les scripts d'initdb exigent d'être root
+# ou l'UID "postgres" propriétaire du volume.
+# Si registry.redhat.io n'est pas accessible depuis votre cluster, utiliser en repli :
+#   quay.io/sclorg/postgresql-16-c9s
+# Secret jingle-quest-db-secret : voir db-secret.yaml (séparé pour ne jamais être écrasé par la CI).
+apiVersion: v1
+kind: Service
+metadata:
+  name: jingle-quest-db
+  labels:
+    app: jingle-quest-db
+spec:
+  clusterIP: None
+  selector:
+    app: jingle-quest-db
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: jingle-quest-db
+  labels:
+    app: jingle-quest-db
+spec:
+  serviceName: jingle-quest-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jingle-quest-db
+  template:
+    metadata:
+      labels:
+        app: jingle-quest-db
+    spec:
+      containers:
+        - name: postgresql
+          image: 'registry.redhat.io/rhel9/postgresql-16'
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: jingle-quest-db-secret
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/pgsql/data
+          readinessProbe:
+            exec:
+              command: ['/usr/libexec/check-container']
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ['/usr/libexec/check-container', '--live']
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            # Quelques Mo de réponses + une vingtaine d'images : 1Gi est large.
+            storage: 1Gi
