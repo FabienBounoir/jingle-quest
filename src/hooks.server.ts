@@ -3,7 +3,7 @@ import { SESSION_COOKIE, deleteSessionCookie, setSessionCookie, validateSession 
 import { isAdmin } from '$lib/server/config';
 
 // Pages accessibles sans session. Les fichiers de static/ (polices, favicon) sont servis avant ce hook.
-const PUBLIC = ['/login', '/auth/', '/healthz'];
+const PUBLIC = ['/login', '/auth/', '/healthz', '/img/logo'];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = null;
