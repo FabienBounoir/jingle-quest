@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { identityFromIdToken } from './oidc';
+import { formatName, identityFromIdToken } from './oidc';
 
 const jwt = (claims: object) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.sig`;
 const expected = { issuer: 'https://idp.example/v2.0', clientId: 'client-1', nonce: 'n1' };
@@ -26,5 +26,25 @@ describe('identityFromIdToken', () => {
 		expect(id({ ...valid, exp: now / 1000 - 1 })).toBeNull();
 		expect(id({ ...valid, email: undefined })).toBeNull();
 		expect(identityFromIdToken('pas-un-jwt', expected, now)).toBeNull();
+	});
+});
+
+describe('formatName', () => {
+	it('remet « NOM Prénom » dans l’ordre et en casse normale', () => {
+		expect(formatName('BOUNOIR Fabien')).toBe('Fabien Bounoir');
+		expect(formatName('DE LA FONTAINE Jean-Pierre')).toBe('Jean-Pierre De La Fontaine');
+		expect(formatName("O'NEIL Siobhán")).toBe("Siobhán O'Neil");
+		expect(formatName('LEFÈVRE Inès')).toBe('Inès Lefèvre');
+	});
+	it('laisse les noms déjà corrects, et ne touche pas aux initiales', () => {
+		expect(formatName('Jane Doe')).toBe('Jane Doe');
+		expect(formatName('Jean DUPONT')).toBe('Jean Dupont');
+		expect(formatName('Marie J. Curie')).toBe('Marie J. Curie');
+		expect(formatName('JEAN DUPONT')).toBe('Jean Dupont'); // tout en majuscules : ordre gardé
+		expect(formatName('  ')).toBe('');
+	});
+	it('préfère given_name + family_name quand l’IdP les envoie', () => {
+		expect(id({ ...valid, name: 'DOE Jane', given_name: 'Jane', family_name: 'DOE' })?.name).toBe('Jane Doe');
+		expect(id({ ...valid, name: 'BOUNOIR Fabien' })?.name).toBe('Fabien Bounoir');
 	});
 });

@@ -88,8 +88,10 @@ export function identityFromIdToken(
 	const email = c.email ?? c.preferred_username ?? c.upn;
 	if (!email || !email.includes('@')) return null;
 	const normalized = email.trim().toLowerCase();
-	// Repli sur la partie locale de l'email (« jane.doe ») si l'IdP n'envoie aucun nom.
-	const name = c.name?.trim() || [c.given_name, c.family_name].filter(Boolean).join(' ').trim() || normalized.split('@')[0];
+	// Prénom + nom séparés s'ils sont fournis (sans ambiguïté d'ordre), sinon `name` remis en forme,
+	// sinon la partie locale de l'email (« jane.doe »).
+	const given = [c.given_name, c.family_name].map((x) => x?.trim()).filter(Boolean).join(' ');
+	const name = formatName(given || c.name?.trim() || '') || normalized.split('@')[0];
 	return { email: normalized, name };
 }
 
@@ -112,4 +114,22 @@ export async function exchangeCode(code: string, pending: OidcPending): Promise<
 	const { id_token } = (await res.json()) as { id_token?: string };
 	if (!id_token) return null;
 	return identityFromIdToken(id_token, { issuer: d.issuer, clientId: config.oidcClientId, nonce: pending.nonce });
+}
+
+const isUpper = (w: string) => /\p{Lu}/u.test(w) && w === w.toLocaleUpperCase('fr');
+const titleCase = (w: string) => w.toLocaleLowerCase('fr').replace(/(^|[-'’])(\p{L})/gu, (_, sep, l) => sep + l.toLocaleUpperCase('fr'));
+
+/**
+ * Nom affiché « Prénom Nom ». Les annuaires d'entreprise (Entra notamment) renvoient souvent
+ * « NOM Prénom » : le bloc en majuscules du début passe à la fin, et tout mot en majuscules est
+ * remis en casse normale (« BOUNOIR Fabien » → « Fabien Bounoir »).
+ */
+export function formatName(raw: string): string {
+	const words = raw.trim().split(/\s+/).filter(Boolean);
+	if (words.length === 0) return '';
+	let lead = 0;
+	while (lead < words.length && isUpper(words[lead])) lead++;
+	// Au moins un mot en majuscules au début ET un prénom derrière : c'est « NOM Prénom ».
+	const ordered = lead > 0 && lead < words.length ? [...words.slice(lead), ...words.slice(0, lead)] : words;
+	return ordered.map((w) => (isUpper(w) && w.replace(/[^\p{L}]/gu, '').length > 1 ? titleCase(w) : w)).join(' ');
 }
