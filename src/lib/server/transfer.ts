@@ -5,7 +5,7 @@ import { answerLists, answers, days, db, listItems, questionAnswers, questions, 
 import { getSettings, invalidateSettings } from './settings';
 import { isValidTimeZone, localParts, zonedTime } from './tz';
 import { MAX_IMAGE_BYTES, MAX_LABEL, sniffImage } from './upload';
-import { parseAdmin, parseBlur, type TypedQuestion } from './questionTypes';
+import { parseAdmin, type TypedQuestion } from './questionTypes';
 import { LIST_TYPES, QUESTION_TYPES, type QuestionType } from './db/schema';
 
 export const FORMAT = 'jingle-quest/1';
@@ -183,22 +183,12 @@ export function parseExport(raw: unknown) {
 		if (q.day) usedDays.add(q.day);
 		const img = image(q.image, where);
 		if (LIST_TYPES.includes(type)) {
-			let config: object = {};
-			if (type === 'blur') {
-				if (!img) throw new ImportError(`${where} : une photo qui se dévoile a besoin de son image.`);
-				try {
-					const fd = new FormData();
-					fd.append('minutes', String((q.config as { minutes?: unknown })?.minutes ?? ''));
-					config = parseBlur(fd);
-				} catch (e) {
-					throw new ImportError(`${where} : ${e instanceof Error ? e.message : 'réglages invalides'}`);
-				}
-			}
+			if (type === 'blur' && !img) throw new ImportError(`${where} : une photo qui se dévoile a besoin de son image.`);
 			const items = q.list ? lists.get(q.list) : undefined;
 			if (!items) throw new ImportError(`${where} : liste « ${q.list} » absente du fichier.`);
 			if (!Array.isArray(q.correct) || q.correct.length === 0 || !q.correct.every((c) => items.has(c)))
 				throw new ImportError(`${where} : bonnes réponses absentes de la liste « ${q.list} ».`);
-			return { type, text: q.text, list: q.list, correct: q.correct, config, solution: {}, day: q.day, image: img };
+			return { type, text: q.text, list: q.list, correct: q.correct, config: {}, solution: {}, day: q.day, image: img };
 		}
 		if (type === 'zone' && !img) throw new ImportError(`${where} : une zone a besoin de son image.`);
 		// On repasse par la validation du formulaire admin : un fichier ne peut rien introduire qu'un

@@ -6,7 +6,7 @@ import { BadInput, file, guard, int, str } from '$lib/server/form';
 import { getSettings } from '$lib/server/settings';
 import { localParts } from '$lib/server/tz';
 import { MAX_IMAGE_BYTES, sniffImage } from '$lib/server/upload';
-import { BadAnswer, parseAdmin, parseBlur, sameShuffledQuestion, type TypedQuestion } from '$lib/server/questionTypes';
+import { BadAnswer, parseAdmin, sameShuffledQuestion, type TypedQuestion } from '$lib/server/questionTypes';
 import { LIST_TYPES, QUESTION_TYPES, type QuestionType } from '$lib/server/db';
 
 /** 'new' → null, sinon l'id numérique. */
@@ -76,14 +76,6 @@ export const actions: Actions = {
 			let correct: number[] = [];
 			let typed = { config: {} as unknown, solution: {} as unknown };
 			if (LIST_TYPES.includes(type)) {
-				if (type === 'blur') {
-					try {
-						typed = { config: parseBlur(fd), solution: {} };
-					} catch (e) {
-						if (e instanceof BadAnswer) throw new BadInput(e.message);
-						throw e;
-					}
-				}
 				listId = int(fd, 'listId', { min: 1, max: 2 ** 31 - 1, label: 'Liste de réponses' });
 				correct = [...new Set(fd.getAll('correct').map(Number))].filter(Number.isInteger);
 				if (correct.length === 0) throw new BadInput('Choisis au moins une bonne réponse.');

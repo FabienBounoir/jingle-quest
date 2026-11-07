@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BadAnswer, answerText, numberScore, parseAdmin, parseBlur, sameShuffledQuestion, scoreAnswer, shuffledOrder, solutionText, type MatchConfig, type MatchSolution, type OrderConfig, type OrderSolution } from './questionTypes';
+import { BadAnswer, answerText, numberScore, parseAdmin, sameShuffledQuestion, scoreAnswer, shuffledOrder, solutionText, type MatchConfig, type MatchSolution, type OrderConfig, type OrderSolution } from './questionTypes';
 
 const form = (entries: [string, string][]) => {
 	const fd = new FormData();
@@ -102,12 +102,5 @@ describe('Associer', () => {
 	});
 	it('reconnaît une association inchangée malgré un autre mélange', () => {
 		expect(sameShuffledQuestion('match', parseAdmin('match', form(rows)), parseAdmin('match', form(rows)))).toBe(true);
-	});
-});
-
-describe('Photo qui se dévoile', () => {
-	it('valide la durée', () => {
-		expect(parseBlur(form([['minutes', '30']]))).toEqual({ minutes: 30 });
-		expect(() => parseBlur(form([['minutes', '0']]))).toThrow(BadAnswer);
 	});
 });

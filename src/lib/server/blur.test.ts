@@ -1,18 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import sharp from 'sharp';
-import { BLUR_STAGES, blurStage, pixelated } from './blur';
-
-describe('blurStage', () => {
-	it('part de l’étape la plus floue et devient nette au bout de la durée', () => {
-		expect(blurStage(-1000, 60)).toBe(0); // aperçu admin avant l'ouverture
-		expect(blurStage(0, 60)).toBe(0);
-		expect(blurStage(11 * 60_000, 60)).toBe(0);
-		expect(blurStage(12 * 60_000, 60)).toBe(1);
-		expect(blurStage(59 * 60_000, 60)).toBe(BLUR_STAGES - 2);
-		expect(blurStage(60 * 60_000, 60)).toBe(BLUR_STAGES - 1);
-		expect(blurStage(10 * 3600_000, 60)).toBe(BLUR_STAGES - 1);
-	});
-});
+import { pixelated } from './blur';
 
 describe('pixelated', () => {
 	it('produit une mosaïque de la taille de l’original, avec peu de couleurs distinctes', async () => {

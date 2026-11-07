@@ -24,8 +24,6 @@ export type ZoneSolution = { x: number; y: number; w: number; h: number };
 export type MatchConfig = { left: string[]; right: string[] };
 /** pairs[i] = indice dans `right` qui va avec left[i]. */
 export type MatchSolution = { pairs: number[] };
-/** Photo qui se dévoile : nette au bout de `minutes` après l'ouverture (réponse dans une liste). */
-export type BlurConfig = { minutes: number };
 
 /** Types avec config + solution propres (la liste et la photo floue passent par question_answers). */
 export type TypedQuestion = Exclude<QuestionType, 'list' | 'blur'>;
@@ -116,13 +114,6 @@ export function parseAdmin(type: TypedQuestion, fd: FormData): { config: object;
 	const ok = [x, y, w, h].every((v) => v >= 0 && v <= 1) && w >= 0.01 && h >= 0.01 && x + w <= 1.0001 && y + h <= 1.0001;
 	if (!ok) throw new BadAnswer('Zone : dessine le rectangle sur l’image.');
 	return { config: {}, solution: { x, y, w, h } satisfies ZoneSolution };
-}
-
-/** Photo qui se dévoile : durée avant d'être nette (en minutes). */
-export function parseBlur(fd: FormData): BlurConfig {
-	const minutes = Number(fd.get('minutes'));
-	if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440) throw new BadAnswer('Photo : durée de dévoilement entre 1 et 1440 minutes.');
-	return { minutes };
 }
 
 /**

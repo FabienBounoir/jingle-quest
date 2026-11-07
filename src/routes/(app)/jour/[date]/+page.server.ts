@@ -1,7 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { bonusAt, eventEnd, isSameDay } from '$lib/server/game';
-import { answeredCount, getDay, getDays, getQuestion, getStandings, myAnswerText, reveal, submitAnswer, userAnswers } from '$lib/server/play';
+import { answeredCount, getDay, getDays, getQuestion, getStandings, myAnswerText, reveal, revealStage, submitAnswer, unblur, userAnswers } from '$lib/server/play';
 import { getSettings } from '$lib/server/settings';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -33,7 +33,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			// Inutile d'envoyer 2 000 noms à qui ne peut plus répondre.
 			items: a || ended ? [] : q.items
 		},
-		myAnswer: a ? { text: myAnswerText(q, a), value: a.value, score: a.score, points: a.points } : null,
+		myAnswer: a ? { text: myAnswerText(q, a), value: a.value, score: a.score, isCorrect: a.isCorrect, points: a.points } : null,
+		// Photo floue : niveau de défloutage déjà atteint par ce joueur (0 en aperçu admin).
+		blurStage: q.type === 'blur' && !preview ? await revealStage(locals.user!.id, q.id) : 0,
 		// La bonne réponse ne quitte le serveur qu'une fois l'événement terminé (SPECS §5.4).
 		reveal: ended ? await reveal(day.questionId) : null,
 		ended,
@@ -56,6 +58,12 @@ export const actions: Actions = {
 		const res = await submitAnswer(locals.user!, params.date, fd, { dryRun });
 		if (!res.ok) return fail(res.status, { error: res.error });
 		const me = dryRun ? undefined : (await getStandings()).find((x) => x.userId === locals.user!.id);
-		return { result: { score: res.score, points: res.points, dryRun: res.dryRun, rank: me?.rank ?? null } };
+		return { result: { score: res.score, correct: res.correct, points: res.points, dryRun: res.dryRun, rank: me?.rank ?? null } };
+	},
+
+	unblur: async ({ params, locals }) => {
+		const res = await unblur(locals.user!.id, params.date);
+		if (!res.ok) return fail(res.status, { error: res.error });
+		return { stage: res.stage };
 	}
 };

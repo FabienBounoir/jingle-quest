@@ -7,6 +7,7 @@
 	import ZoneInput from '$lib/components/answers/ZoneInput.svelte';
 	import MatchInput from '$lib/components/answers/MatchInput.svelte';
 	import BlurImage from '$lib/components/BlurImage.svelte';
+	import { BLUR_MULTIPLIERS } from '$lib/blur';
 	import { serverClock } from '$lib/clock.svelte';
 	import { dayLabel } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
@@ -18,16 +19,20 @@
 	let ready = $state(false); // autres types : le composant de saisie dit si la réponse est complète
 	let sending = $state(false);
 	const q = $derived(data.question);
-	const cfg = $derived(q.config as { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[]; minutes?: number });
+	const cfg = $derived(q.config as { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[] });
 	const canSubmit = $derived(q.type === 'list' || q.type === 'blur' ? value !== null : ready);
 	const imgSrc = $derived(`/img/q/${q.id}`);
 	const zonePoint = $derived(data.myAnswer?.value as { x: number; y: number } | null | undefined);
-	const verdict = $derived(!data.myAnswer ? null : data.myAnswer.score >= 1 ? 'ok' : data.myAnswer.score > 0 ? 'part' : 'ko');
+	// Juste = réussi, même avec des points réduits (photo défloutée) ; points partiels = presque.
+	const verdict = $derived(!data.myAnswer ? null : data.myAnswer.isCorrect ? 'ok' : data.myAnswer.score > 0 ? 'part' : 'ko');
+	// svelte-ignore state_referenced_locally
+	let blurStage = $state(data.blurStage);
 	// svelte-ignore state_referenced_locally
 	const clock = serverClock(data.serverNow);
 	const bonusLeft = $derived(data.sameDay ? Math.max(0, data.bonusEndsAt - clock.now) : 0);
 	const bonusNow = $derived(Math.round(data.scoring.bonusMax * (bonusLeft / (data.scoring.bonusMinutes * 60_000))));
-	const potential = $derived(data.sameDay ? data.scoring.pointsCorrect + bonusNow : data.scoring.pointsCatchup);
+	const blurFactor = $derived(q.type === 'blur' ? BLUR_MULTIPLIERS[blurStage] : 1);
+	const potential = $derived(Math.round(blurFactor * (data.sameDay ? data.scoring.pointsCorrect + bonusNow : data.scoring.pointsCatchup)));
 	const dry = $derived(form && 'result' in form && form.result?.dryRun ? form.result : null);
 	const rank = $derived(form && 'result' in form ? form.result?.rank : null);
 	const error = $derived(form && 'error' in form ? form.error : null);
@@ -53,7 +58,7 @@
 	<section class="card main" aria-labelledby="q">
 		<!-- Zone : l'image EST le champ de réponse (ou le support du résultat), on ne l'affiche pas deux fois. -->
 		{#if q.type === 'blur' && q.hasImage}
-			<BlurImage id={q.id} opensAt={data.opensAt} minutes={cfg.minutes ?? 60} serverNow={data.serverNow} ended={data.ended} />
+			<BlurImage id={q.id} bind:stage={blurStage} canUnblur={!data.myAnswer && !data.ended} preview={data.preview} />
 		{:else if q.hasImage && q.type !== 'zone'}
 			<img src={imgSrc} alt="Illustration de la question" class="qimg" />
 		{/if}
@@ -105,6 +110,8 @@
 				{#if q.type === 'list' || q.type === 'blur'}
 					<Combobox items={q.items} bind:value id="answer" label="ta réponse · {q.listName} :" />
 					<input type="hidden" name="itemId" value={value ?? ''} />
+					<!-- Aperçu admin uniquement : le serveur lit sinon le niveau en base. -->
+					{#if q.type === 'blur' && data.preview}<input type="hidden" name="stage" value={blurStage} />{/if}
 				{:else if q.type === 'choice'}
 					<ChoiceInput options={cfg.options ?? []} bind:ready />
 				{:else if q.type === 'number'}
@@ -119,8 +126,8 @@
 
 				{#if error}<p class="notice error" role="alert">{error}</p>{/if}
 				{#if dry}
-					<p class="notice {dry.score > 0 ? 'ok' : 'error'}" role="status">
-						Aperçu : {dry.score >= 1 ? 'réponse juste' : dry.score > 0 ? `réponse à ${Math.round(dry.score * 100)} %` : 'réponse fausse'}{dry.points ? `, elle rapporterait ${dry.points} pts` : ''}. Rien n'est enregistré.
+					<p class="notice {dry.correct || dry.score > 0 ? 'ok' : 'error'}" role="status">
+						Aperçu : {dry.correct ? 'réponse juste' : dry.score > 0 ? `réponse à ${Math.round(dry.score * 100)} %` : 'réponse fausse'}{dry.points ? `, elle rapporterait ${dry.points} pts` : ''}. Rien n'est enregistré.
 					</p>
 				{/if}
 

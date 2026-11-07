@@ -1,30 +1,56 @@
 <script lang="ts">
-	// Photo qui se dévoile : l'URL change à chaque étape (calculée ici sur l'horloge du serveur), le
-	// serveur décide de toute façon de la version qu'il renvoie.
-	import { serverClock } from '$lib/clock.svelte';
-	let { id, opensAt, minutes, serverNow, ended }: { id: number; opensAt: number; minutes: number; serverNow: number; ended: boolean } = $props();
-	const STAGES = 6;
-	// svelte-ignore state_referenced_locally
-	const clock = serverClock(serverNow);
-	const step = $derived((minutes * 60_000) / (STAGES - 1));
-	const elapsed = $derived(clock.now - opensAt);
-	const stage = $derived(ended ? STAGES - 1 : elapsed <= 0 ? 0 : Math.min(STAGES - 1, Math.floor(elapsed / step)));
-	const sharpIn = $derived(Math.max(0, Math.ceil((minutes * 60_000 - elapsed) / 60_000)));
+	// Photo qui se dévoile : le joueur défloute lui-même, chaque niveau baisse ses points max. Le niveau
+	// vit en base (action ?/unblur) ; en aperçu admin il reste local et rien n'est enregistré.
+	import { enhance } from '$app/forms';
+	import { BLUR_MULTIPLIERS, LAST_STAGE } from '$lib/blur';
+	let {
+		id,
+		stage = $bindable(0),
+		canUnblur,
+		preview
+	}: { id: number; stage?: number; canUnblur: boolean; preview: boolean } = $props();
+
+	let busy = $state(false);
+	const pct = (s: number) => Math.round(BLUR_MULTIPLIERS[s] * 100);
+	const next = $derived(Math.min(stage + 1, LAST_STAGE));
 </script>
 
-<figure class="blur">
-	<img src="/img/q/{id}?stage={stage}" alt="Visuel de la question, de plus en plus net avec le temps" />
-	<figcaption>
-		<span class="dots" aria-hidden="true">{#each Array(STAGES) as _, i (i)}<i class:on={i <= stage}></i>{/each}</span>
-		{#if stage < STAGES - 1}la photo se précise… nette dans {sharpIn} min{:else}photo nette !{/if}
-	</figcaption>
-</figure>
+<div class="blur">
+	<img src="/img/q/{id}?stage={stage}" alt="Visuel de la question, flouté au niveau {stage + 1} sur {LAST_STAGE + 1}" />
+	<p class="caption">
+		<span class="dots" aria-hidden="true">{#each BLUR_MULTIPLIERS as _, i (i)}<i class:on={i <= stage}></i>{/each}</span>
+		<span>points max : <strong>{pct(stage)} %</strong></span>
+	</p>
+
+	{#if canUnblur && stage < LAST_STAGE}
+		{#if preview}
+			<button type="button" class="btn secondary" onclick={() => (stage = next)}>Déflouter (aperçu) → {pct(next)} %</button>
+		{:else}
+			<form
+				method="POST"
+				action="?/unblur"
+				use:enhance={() => {
+					busy = true;
+					return async ({ result }) => {
+						if (result.type === 'success' && typeof result.data?.stage === 'number') stage = result.data.stage;
+						busy = false;
+					};
+				}}
+			>
+				<button class="btn secondary" type="submit" disabled={busy}>Déflouter → points max {pct(next)} %</button>
+			</form>
+		{/if}
+		<p class="muted">Définitif : chaque niveau de défloutage réduit les points d'une bonne réponse.</p>
+	{/if}
+</div>
 
 <style>
-	.blur { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+	.blur { margin: 0; display: flex; flex-direction: column; gap: 10px; }
 	img { width: 100%; max-height: 420px; object-fit: contain; border: 3.5px solid var(--ink); border-radius: 18px; background: var(--white); image-rendering: pixelated; }
-	figcaption { display: flex; align-items: center; gap: 10px; font: 400 19px var(--font-hand); }
+	.caption { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; font-size: 15px; }
 	.dots { display: inline-flex; gap: 4px; }
 	.dots i { width: 12px; height: 12px; border: 2.5px solid var(--ink); border-radius: 50%; background: var(--white); }
 	.dots i.on { background: var(--gold); }
+	form, .btn { align-self: flex-start; }
+	.muted { margin: 0; }
 </style>

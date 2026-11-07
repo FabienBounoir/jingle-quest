@@ -60,7 +60,8 @@ export const listItems = pgTable(
 
 /**
  * list (autocomplétion dans une liste), choice (QCM), number (estimation), order (remettre dans l'ordre),
- * zone (clic sur l'image), match (associer deux colonnes), blur (photo qui se dévoile + réponse dans une liste).
+ * zone (clic sur l'image), match (associer deux colonnes), blur (photo floue que le joueur défloute,
+ * chaque niveau lui coûtant des points ; réponse dans une liste).
  */
 export const QUESTION_TYPES = ['list', 'choice', 'number', 'order', 'zone', 'match', 'blur'] as const;
 /** Types dont la réponse se choisit dans une liste (bonnes réponses dans question_answers). */
@@ -134,6 +135,24 @@ export const answers = pgTable(
 	},
 	// La clé primaire EST la règle « une seule tentative par question ».
 	(t) => [primaryKey({ columns: [t.userId, t.questionId] }), index().on(t.questionId)]
+);
+
+/**
+ * Photo qui se dévoile : niveau de défloutage atteint par chaque joueur (0 = le plus flou). Stocké en
+ * base et pas dans le navigateur : recharger la page ou changer d'onglet ne fait pas regagner de points.
+ */
+export const reveals = pgTable(
+	'reveals',
+	{
+		userId: uuid('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		questionId: integer('question_id')
+			.notNull()
+			.references(() => questions.id, { onDelete: 'cascade' }),
+		stage: integer('stage').notNull()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.questionId] })]
 );
 
 export const pushSubscriptions = pgTable('push_subscriptions', {

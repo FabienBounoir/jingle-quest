@@ -1,6 +1,7 @@
 // Accès base côté joueur : calendrier, question, soumission, classement. Règles pures dans game.ts.
 import { and, asc, count, eq, sql } from 'drizzle-orm';
-import { answerLists, answers, days, db, listItems, questionAnswers, questions, users } from '$lib/server/db';
+import { answerLists, answers, days, db, listItems, questionAnswers, questions, reveals, users } from '$lib/server/db';
+import { BLUR_MULTIPLIERS, LAST_STAGE } from '$lib/blur';
 import { eventEnd, isSameDay, points } from './game';
 import { BadAnswer, answerText, scoreAnswer, solutionText, type TypedQuestion, type ZoneSolution } from './questionTypes';
 import { LIST_TYPES, type QuestionType } from './db/schema';
@@ -118,10 +119,48 @@ export async function reveal(questionId: number): Promise<{ text: string | null;
 	return { text: rows.map((r) => r.label).join(' · '), zone: null };
 }
 
+// ---------- Photo qui se dévoile ----------
+
+/** Niveau de défloutage atteint par ce joueur sur cette question (0 = le plus flou). */
+export async function revealStage(userId: string, questionId: number): Promise<number> {
+	const [r] = await db
+		.select({ stage: reveals.stage })
+		.from(reveals)
+		.where(and(eq(reveals.userId, userId), eq(reveals.questionId, questionId)));
+	return r?.stage ?? 0;
+}
+
+export type UnblurResult = { ok: true; stage: number } | { ok: false; status: 400 | 403 | 404 | 409; error: string };
+
+/**
+ * Défloute d'un niveau (définitif : les points max baissent). Refusé une fois la réponse envoyée, avant
+ * l'ouverture ou après la fin. Un seul UPDATE atomique : deux clics simultanés comptent bien pour deux.
+ */
+export async function unblur(userId: string, date: string): Promise<UnblurResult> {
+	const s = await getSettings();
+	const now = new Date();
+	const day = await getDay(date);
+	if (!day?.questionId) return { ok: false, status: 404, error: 'Pas de quête ce jour-là.' };
+	if (day.opensAt > now || now >= eventEnd(s.endDate, s.timezone)) return { ok: false, status: 403, error: 'Cette case n’est pas jouable.' };
+	const q = await loadQuestion(day.questionId);
+	if (q.type !== 'blur') return { ok: false, status: 400, error: 'Pas de photo à déflouter ici.' };
+	const [done] = await db
+		.select({ n: count() })
+		.from(answers)
+		.where(and(eq(answers.userId, userId), eq(answers.questionId, q.id)));
+	if (done.n > 0) return { ok: false, status: 409, error: 'Tu as déjà répondu.' };
+	const [r] = await db
+		.insert(reveals)
+		.values({ userId, questionId: q.id, stage: 1 })
+		.onConflictDoUpdate({ target: [reveals.userId, reveals.questionId], set: { stage: sql`least(${reveals.stage} + 1, ${LAST_STAGE})` } })
+		.returning({ stage: reveals.stage });
+	return { ok: true, stage: r.stage };
+}
+
 // ---------- Soumission ----------
 
 export type AnswerResult =
-	| { ok: true; score: number; points: number; dryRun: boolean }
+	| { ok: true; score: number; correct: boolean; points: number; dryRun: boolean }
 	| { ok: false; status: 400 | 403 | 404 | 409; error: string };
 
 /**
@@ -143,6 +182,7 @@ export async function submitAnswer(
 
 	const q = await loadQuestion(day.questionId);
 	let score: number;
+	let correct: boolean;
 	let itemId: number | null = null;
 	let value: unknown = null;
 	if (LIST_TYPES.includes(q.type)) {
@@ -152,10 +192,19 @@ export async function submitAnswer(
 			.select({ n: count() })
 			.from(questionAnswers)
 			.where(and(eq(questionAnswers.questionId, q.id), eq(questionAnswers.itemId, itemId)));
-		score = n > 0 ? 1 : 0;
+		correct = n > 0;
+		score = correct ? 1 : 0;
+		if (q.type === 'blur') {
+			// Photo défloutée : une bonne réponse rapporte moins. Niveau lu en base (jamais celui du client),
+			// sauf en aperçu admin où rien n'est enregistré et où la page envoie le niveau affiché.
+			const stage = opts.dryRun ? Math.min(LAST_STAGE, Math.max(0, Number(fd.get('stage')) || 0)) : await revealStage(user.id, q.id);
+			score = correct ? BLUR_MULTIPLIERS[stage] : 0;
+			value = { stage };
+		}
 	} else {
 		try {
 			({ score, value } = scoreAnswer(q.type as TypedQuestion, q.config, q.secret, fd));
+			correct = score >= 1;
 		} catch (e) {
 			if (e instanceof BadAnswer) return { ok: false, status: 400, error: e.message };
 			throw e;
@@ -165,10 +214,9 @@ export async function submitAnswer(
 	const early = day.opensAt > now;
 	const elapsedMs = early ? 0 : now.getTime() - day.opensAt.getTime();
 	const pts = points(score, early || isSameDay(day.date, now, s.timezone), elapsedMs, s);
-	if (opts.dryRun) return { ok: true, score, points: pts, dryRun: true };
+	if (opts.dryRun) return { ok: true, score, correct, points: pts, dryRun: true };
 
 	// La clé primaire (user, question) EST la règle « une seule tentative » : pas de course possible.
-	const correct = score >= 1;
 	const inserted = await db
 		.insert(answers)
 		.values({ userId: user.id, questionId: q.id, itemId, value, score, isCorrect: correct, points: pts, elapsedMs })
@@ -176,7 +224,7 @@ export async function submitAnswer(
 		.returning({ points: answers.points });
 	if (inserted.length === 0) return { ok: false, status: 409, error: 'Tu as déjà répondu à cette quête.' };
 	onAnswer({ userId: user.id, name: user.displayName, questionId: q.id, points: pts, correct, elapsedMs });
-	return { ok: true, score, points: pts, dryRun: false };
+	return { ok: true, score, correct, points: pts, dryRun: false };
 }
 
 // ---------- Classement ----------

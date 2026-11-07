@@ -44,9 +44,10 @@ describe('cellState', () => {
 		expect(cellState(day, null, at('2026-12-09T08:00:00Z'), end, tz)).toBe('today');
 		expect(cellState(day, null, at('2026-12-10T08:00:00Z'), end, tz)).toBe('catch');
 		expect(cellState(day, null, at('2026-12-25T08:00:00Z'), end, tz)).toBe('closed');
-		expect(cellState(day, { score: 1 }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ok');
-		expect(cellState(day, { score: 0.4 }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('part');
-		expect(cellState(day, { score: 0 }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ko');
+		expect(cellState(day, { score: 1, isCorrect: true }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ok');
+		expect(cellState(day, { score: 0.45, isCorrect: true }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ok');
+		expect(cellState(day, { score: 0.4, isCorrect: false }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('part');
+		expect(cellState(day, { score: 0, isCorrect: false }, at('2026-12-10T08:00:00Z'), end, tz)).toBe('ko');
 		expect(cellState({ ...day, hasQuestion: false }, null, at('2026-12-09T09:00:00Z'), end, tz)).toBe('empty');
 	});
 });

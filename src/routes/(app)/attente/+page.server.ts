@@ -14,7 +14,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const end = eventEnd(s.endDate, s.timezone);
 	const answered = new Set(mine.map((a) => a.questionId));
 	const catchUp = dayRows.filter(
-		(d) => d.questionId && cellState({ date: d.date, opensAt: d.opensAt, hasQuestion: true }, answered.has(d.questionId) ? { score: 1 } : null, now, end, s.timezone) === 'catch'
+		(d) => d.questionId && cellState({ date: d.date, opensAt: d.opensAt, hasQuestion: true }, answered.has(d.questionId) ? { score: 1, isCorrect: true } : null, now, end, s.timezone) === 'catch'
 	);
 	return {
 		// Heure affichée dans le fuseau de l'événement, pas celui du navigateur.

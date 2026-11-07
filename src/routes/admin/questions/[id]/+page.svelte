@@ -13,7 +13,7 @@
 		{ id: 'order', label: 'Ordre', hint: '3 à 5 éléments à remettre dans l’ordre' },
 		{ id: 'zone', label: 'Zone', hint: 'cliquer au bon endroit sur l’image' },
 		{ id: 'match', label: 'Associer', hint: '3 à 5 paires à relier' },
-		{ id: 'blur', label: 'Photo floue', hint: 'une photo pixellisée qui se précise ; réponse dans une liste' }
+		{ id: 'blur', label: 'Photo floue', hint: 'une photo pixellisée que le joueur défloute en perdant des points ; réponse dans une liste' }
 	] as const;
 
 	const q = $derived(data.question);
@@ -27,7 +27,7 @@
 	let filter = $state('');
 
 	// Autres types : état initialisé depuis la config et la solution enregistrées.
-	type Cfg = { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[]; minutes?: number };
+	type Cfg = { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[] };
 	type Sol = { correct?: number; value?: number; order?: number[]; pairs?: number[]; x?: number; y?: number; w?: number; h?: number };
 	// svelte-ignore state_referenced_locally
 	const cfg0 = (data.question?.config ?? {}) as Cfg;
@@ -45,7 +45,6 @@
 	// Associer : saisi par paires (gauche → droite), le serveur mélange la colonne de droite.
 	let matchLeft = $state(pad(cfg0.left ?? [], 5));
 	let matchRight = $state(pad(cfg0.left && cfg0.right && sol0.pairs ? cfg0.left.map((_, i) => cfg0.right![sol0.pairs![i]]) : [], 5));
-	let blurMinutes = $state(cfg0.minutes ?? 60);
 	let zone = $state(sol0.x !== undefined ? { x: sol0.x, y: sol0.y!, w: sol0.w!, h: sol0.h! } : null);
 	let newImage = $state<string | null>(null);
 	const imageSrc = $derived(newImage ?? (data.question?.hasImage ? `/img/q/${data.question.id}` : null));
@@ -131,11 +130,10 @@
 			</div>
 
 			{#if type === 'blur'}
-				<label class="field">
-					<span>nette au bout de (minutes)</span>
-					<input type="number" name="minutes" min="1" max="1440" bind:value={blurMinutes} readonly={locked} />
-				</label>
-				<p class="muted">6 étapes, de très pixellisée à nette. Conseil : la même durée que le bonus de rapidité, pour que répondre tôt rapporte plus.</p>
+				<p class="notice ok">
+					La photo démarre très pixellisée : chaque joueur peut la déflouter lui-même, au prix de points.
+					Points max d'une bonne réponse : 100 % → 80 % → 60 % → 45 % → 30 % → 20 % (nette).
+				</p>
 			{/if}
 			{#if listLike}
 			<div class="field">

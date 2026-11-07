@@ -1,6 +1,6 @@
 import { count, sql } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
-import { answers, days, db, pushSubscriptions, questions, users } from '$lib/server/db';
+import { answers, days, db, pushSubscriptions, questions, reveals, users } from '$lib/server/db';
 import { BadInput, file, guard } from '$lib/server/form';
 import { reloadLive } from '$lib/server/live';
 import { ImportError, importData } from '$lib/server/transfer';
@@ -42,6 +42,7 @@ export const actions: Actions = {
 				throw new BadInput('Tape EFFACER pour confirmer.');
 			const n = await db.transaction(async (tx) => {
 				const deleted = await tx.delete(answers).returning({ q: answers.questionId });
+				await tx.delete(reveals); // niveaux de défloutage des photos : on repart tous du plus flou
 				// Les cases déjà passées seront « rouvertes » sans bruit (ni rappel push) par la boucle temps réel.
 				await tx.update(days).set({ notifiedAt: sql`null`, remindedAt: sql`null` });
 				return deleted.length;

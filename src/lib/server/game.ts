@@ -34,12 +34,13 @@ export type CellState = 'wrapped' | 'empty' | 'today' | 'catch' | 'ok' | 'part' 
  */
 export function cellState(
 	day: { date: string; opensAt: Date; hasQuestion: boolean },
-	answer: { score: number } | null,
+	answer: { score: number; isCorrect: boolean } | null,
 	now: Date,
 	end: Date,
 	timezone: string
 ): CellState {
-	if (answer) return answer.score >= 1 ? 'ok' : answer.score > 0 ? 'part' : 'ko';
+	// Juste = réussie, même avec des points réduits (photo défloutée) ; points partiels = presque.
+	if (answer) return answer.isCorrect ? 'ok' : answer.score > 0 ? 'part' : 'ko';
 	if (day.opensAt > now) return 'wrapped';
 	if (!day.hasQuestion) return 'empty';
 	if (now >= end) return 'closed';
