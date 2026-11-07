@@ -5,7 +5,8 @@ import { answerLists, answers, days, db, listItems, questionAnswers, questions }
 import { BadInput, file, guard, int, str } from '$lib/server/form';
 import { getSettings } from '$lib/server/settings';
 import { localParts } from '$lib/server/tz';
-import { MAX_IMAGE_BYTES, sniffImage } from '$lib/server/upload';
+import { MAX_IMAGE_BYTES } from '$lib/server/upload';
+import { sanitizeImage } from '$lib/server/images';
 import { BadAnswer, parseAdmin, sameShuffledQuestion, type TypedQuestion } from '$lib/server/questionTypes';
 import { LIST_TYPES, QUESTION_TYPES, type QuestionType } from '$lib/server/db';
 
@@ -97,9 +98,9 @@ export const actions: Actions = {
 			let imagePatch: { image: Buffer | null; imageMime: string | null } | undefined;
 			if (image) {
 				if (image.length > MAX_IMAGE_BYTES) throw new BadInput('Image : 2 Mo maximum.');
-				const mime = sniffImage(image);
-				if (!mime) throw new BadInput('Image : JPG, PNG, WebP ou GIF uniquement.');
-				imagePatch = { image, imageMime: mime };
+				const clean = await sanitizeImage(image); // sans métadonnées (titre, GPS…) : cf. images.ts
+				if (!clean) throw new BadInput('Image : JPG, PNG, WebP ou GIF uniquement.');
+				imagePatch = { image: clean.data, imageMime: clean.mime };
 			} else if (fd.get('removeImage') === 'on') {
 				if (type === 'zone' || type === 'blur') throw new BadInput('Ce type de question a besoin de son image.');
 				imagePatch = { image: null, imageMime: null };

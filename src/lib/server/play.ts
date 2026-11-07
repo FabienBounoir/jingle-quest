@@ -16,13 +16,14 @@ export type QuestionPayload = {
 	type: QuestionType;
 	text: string;
 	hasImage: boolean;
-	/** Type « list » : nom de la liste et ses valeurs (autocomplétion). */
+	/** Types « list » et « blur » : nom de la liste et ses valeurs (autocomplétion). `id` est le jeton
+	 * aléatoire de la valeur, jamais son id en base (qui suit l'ordre de création, cf. schema.ts). */
 	listName: string | null;
-	items: { id: number; label: string }[];
+	items: { id: string; label: string }[];
 	/** Autres types : propositions du QCM, éléments mélangés, unité… */
 	config: unknown;
 };
-type CachedQuestion = QuestionPayload & { secret: unknown };
+type CachedQuestion = QuestionPayload & { secret: unknown; itemIdByToken: Map<string, number> };
 
 // ponytail: cache sans TTL, vidé par l'admin à chaque enregistrement (un seul pod, SPECS §7.6).
 // À 9h, 2 000 chargements de la même question = 1 lecture en base.
@@ -51,11 +52,25 @@ function loadQuestion(id: number): Promise<CachedQuestion> {
 				.leftJoin(answerLists, eq(answerLists.id, questions.listId))
 				.where(eq(questions.id, id));
 			if (!q) throw new Error(`question ${id} introuvable`);
-			const items =
+			const rows =
 				LIST_TYPES.includes(q.type) && q.listId
-					? await db.select({ id: listItems.id, label: listItems.label }).from(listItems).where(eq(listItems.listId, q.listId)).orderBy(asc(listItems.label))
+					? await db
+							.select({ id: listItems.id, token: listItems.token, label: listItems.label })
+							.from(listItems)
+							.where(eq(listItems.listId, q.listId))
+							.orderBy(asc(listItems.label))
 					: [];
-			return { id: q.id, type: q.type, text: q.text, hasImage: q.mime !== null, listName: q.listName, items, config: q.config, secret: q.solution };
+			return {
+				id: q.id,
+				type: q.type,
+				text: q.text,
+				hasImage: q.mime !== null,
+				listName: q.listName,
+				items: rows.map((r) => ({ id: r.token, label: r.label })),
+				config: q.config,
+				secret: q.solution,
+				itemIdByToken: new Map(rows.map((r) => [r.token, r.id]))
+			};
 		})();
 		p.catch(() => questionCache.delete(id));
 		questionCache.set(id, p);
@@ -65,7 +80,7 @@ function loadQuestion(id: number): Promise<CachedQuestion> {
 
 /** La question telle qu'on peut l'envoyer au navigateur (sans la solution). */
 export async function getQuestion(id: number): Promise<QuestionPayload> {
-	const { secret: _secret, ...pub } = await loadQuestion(id);
+	const { secret: _secret, itemIdByToken: _ids, ...pub } = await loadQuestion(id);
 	return pub;
 }
 
@@ -98,8 +113,12 @@ export async function userAnswers(userId: string) {
 export const answeredCount = getAnswered;
 
 /** La réponse d'un joueur, en texte (zone : null, elle se dessine sur l'image). */
-export function myAnswerText(q: QuestionPayload, a: { itemId: number | null; value: unknown }): string | null {
-	if (LIST_TYPES.includes(q.type)) return q.items.find((i) => i.id === a.itemId)?.label ?? '?';
+export async function myAnswerText(q: QuestionPayload, a: { itemId: number | null; value: unknown }): Promise<string | null> {
+	if (LIST_TYPES.includes(q.type)) {
+		if (a.itemId === null) return '?';
+		const [it] = await db.select({ label: listItems.label }).from(listItems).where(eq(listItems.id, a.itemId));
+		return it?.label ?? '?';
+	}
 	return answerText(q.type as TypedQuestion, q.config, a.value);
 }
 
@@ -186,8 +205,8 @@ export async function submitAnswer(
 	let itemId: number | null = null;
 	let value: unknown = null;
 	if (LIST_TYPES.includes(q.type)) {
-		itemId = Number(fd.get('itemId'));
-		if (!q.items.some((i) => i.id === itemId)) return { ok: false, status: 400, error: 'Choisis une réponse dans la liste.' };
+		itemId = q.itemIdByToken.get(String(fd.get('itemId') ?? '')) ?? null;
+		if (itemId === null) return { ok: false, status: 400, error: 'Choisis une réponse dans la liste.' };
 		const [{ n }] = await db
 			.select({ n: count() })
 			.from(questionAnswers)

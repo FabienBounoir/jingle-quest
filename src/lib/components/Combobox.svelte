@@ -3,7 +3,7 @@
 	// si une entrée de la liste est choisie : pas de texte libre, donc rien à corriger côté serveur.
 	import { fold } from '$lib/text';
 
-	type Item = { id: number; label: string };
+	type Item = { id: string; label: string };
 	let {
 		items,
 		value = $bindable(null),
@@ -11,7 +11,7 @@
 		label,
 		placeholder = 'Tape un nom…',
 		disabled = false
-	}: { items: Item[]; value?: number | null; id: string; label: string; placeholder?: string; disabled?: boolean } = $props();
+	}: { items: Item[]; value?: string | null; id: string; label: string; placeholder?: string; disabled?: boolean } = $props();
 
 	const MAX = 8;
 	let query = $state('');

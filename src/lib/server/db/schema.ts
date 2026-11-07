@@ -53,7 +53,12 @@ export const listItems = pgTable(
 		listId: integer('list_id')
 			.notNull()
 			.references(() => answerLists.id, { onDelete: 'cascade' }),
-		label: text('label').notNull()
+		label: text('label').notNull(),
+		/**
+		 * Identifiant envoyé au navigateur à la place de `id`. Les id suivent l'ordre de création : une valeur
+		 * ajoutée juste avant d'écrire une question aurait le plus grand id et trahirait la bonne réponse.
+		 */
+		token: uuid('token').notNull().defaultRandom()
 	},
 	(t) => [unique().on(t.listId, t.label)]
 );

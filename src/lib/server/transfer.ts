@@ -5,6 +5,7 @@ import { answerLists, answers, days, db, listItems, questionAnswers, questions, 
 import { getSettings, invalidateSettings } from './settings';
 import { isValidTimeZone, localParts, zonedTime } from './tz';
 import { MAX_IMAGE_BYTES, MAX_LABEL, sniffImage } from './upload';
+import { sanitizeImage } from './images';
 import { parseAdmin, type TypedQuestion } from './questionTypes';
 import { LIST_TYPES, QUESTION_TYPES, type QuestionType } from './db/schema';
 
@@ -214,6 +215,15 @@ export async function importData(raw: unknown): Promise<{ lists: number; questio
 	const data = parseExport(raw);
 	const [{ n }] = await db.select({ n: count() }).from(answers);
 	if (n > 0) throw new ImportError(`${n} réponse(s) de joueurs existent : remets d'abord les réponses à zéro.`);
+
+	// Un fichier d'export peut venir d'ailleurs : ses images sont nettoyées comme un envoi admin.
+	const clean = async (i: { buf: Buffer; mime: string } | null) => {
+		if (!i) return null;
+		const c = await sanitizeImage(i.buf);
+		return c ? { buf: c.data, mime: c.mime } : null;
+	};
+	data.settings.logo = await clean(data.settings.logo);
+	for (const q of data.questions) q.image = await clean(q.image);
 
 	await db.transaction(async (tx) => {
 		await tx.delete(days);

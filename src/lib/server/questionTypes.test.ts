@@ -10,11 +10,24 @@ const form = (entries: [string, string][]) => {
 describe('QCM', () => {
 	it('valide les propositions et note juste ou faux', () => {
 		const q = parseAdmin('choice', form([['option', 'Lyon'], ['option', ' Paris '], ['option', ''], ['option', 'Nantes'], ['correct', '1']]));
-		expect(q.config).toEqual({ options: ['Lyon', 'Paris', 'Nantes'] });
-		expect(scoreAnswer('choice', q.config, q.solution, form([['choice', '1']])).score).toBe(1);
-		expect(scoreAnswer('choice', q.config, q.solution, form([['choice', '0']])).score).toBe(0);
+		const c = q.config as { options: string[] };
+		const good = (q.solution as { correct: number }).correct;
+		expect([...c.options].sort()).toEqual(['Lyon', 'Nantes', 'Paris']); // mélangées
+		expect(c.options[good]).toBe('Paris');
+		expect(scoreAnswer('choice', q.config, q.solution, form([['choice', String(good)]])).score).toBe(1);
+		expect(scoreAnswer('choice', q.config, q.solution, form([['choice', String((good + 1) % 3)]])).score).toBe(0);
 		expect(() => scoreAnswer('choice', q.config, q.solution, form([['choice', '7']]))).toThrow(BadAnswer);
 		expect(solutionText('choice', q.config, q.solution)).toBe('Paris');
+	});
+	it('place la bonne réponse partout, pas seulement là où l’admin l’a mise', () => {
+		const at = new Set<number>();
+		for (let i = 0; i < 200; i++) at.add((parseAdmin('choice', form([['option', 'A'], ['option', 'B'], ['option', 'C'], ['correct', '0']])).solution as { correct: number }).correct);
+		expect(at).toEqual(new Set([0, 1, 2]));
+	});
+	it('reconnaît un QCM inchangé malgré un autre mélange', () => {
+		const f = () => form([['option', 'A'], ['option', 'B'], ['option', 'C'], ['correct', '1']]);
+		expect(sameShuffledQuestion('choice', parseAdmin('choice', f()), parseAdmin('choice', f()))).toBe(true);
+		expect(sameShuffledQuestion('choice', parseAdmin('choice', f()), parseAdmin('choice', form([['option', 'A'], ['option', 'B'], ['option', 'C'], ['correct', '2']])))).toBe(false);
 	});
 	it('refuse un QCM incohérent', () => {
 		expect(() => parseAdmin('choice', form([['option', 'Seul'], ['correct', '0']]))).toThrow(/entre 2 et 6/);
@@ -44,8 +57,14 @@ describe('Estimation', () => {
 });
 
 describe('Remettre dans l’ordre', () => {
-	it('mélange sans jamais garder l’ordre d’origine', () => {
-		for (let i = 0; i < 50; i++) expect(shuffledOrder(3)).not.toEqual([0, 1, 2]);
+	it('mélange uniformément, ordre d’origine compris (sinon ce serait une information)', () => {
+		const seen = new Set<string>();
+		for (let i = 0; i < 600; i++) {
+			const o = shuffledOrder(3);
+			expect([...o].sort()).toEqual([0, 1, 2]);
+			seen.add(o.join());
+		}
+		expect(seen.size).toBe(6); // les 6 permutations sortent, y compris 0,1,2
 	});
 	it('retrouve la solution à partir des éléments mélangés et note les positions justes', () => {
 		const q = parseAdmin('order', form([['item', '2015'], ['item', '2018'], ['item', '2021'], ['item', '2024']]));

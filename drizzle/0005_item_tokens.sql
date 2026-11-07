@@ -1,0 +1,1 @@
+ALTER TABLE "list_items" ADD COLUMN "token" uuid DEFAULT gen_random_uuid() NOT NULL;

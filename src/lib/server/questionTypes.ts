@@ -53,16 +53,17 @@ function num(raw: FormDataEntryValue | null): number {
 	return Number.isFinite(n) ? n : NaN;
 }
 
-/** Mélange au hasard (crypto) en évitant l'ordre d'origine, sinon la solution serait l'ordre affiché. */
+/**
+ * Mélange uniforme (Fisher-Yates, aléa crypto). Volontairement SANS exclure l'ordre d'origine : le code
+ * est lisible par les joueurs, et « l'ordre affiché n'est jamais le bon » serait une information.
+ */
 export function shuffledOrder(n: number): number[] {
-	for (;;) {
-		const idx = [...Array(n).keys()];
-		for (let i = n - 1; i > 0; i--) {
-			const j = randomInt(i + 1);
-			[idx[i], idx[j]] = [idx[j], idx[i]];
-		}
-		if (n < 2 || idx.some((v, i) => v !== i)) return idx;
+	const idx = [...Array(n).keys()];
+	for (let i = n - 1; i > 0; i--) {
+		const j = randomInt(i + 1);
+		[idx[i], idx[j]] = [idx[j], idx[i]];
 	}
+	return idx;
 }
 
 export function parseAdmin(type: TypedQuestion, fd: FormData): { config: object; solution: object } {
@@ -75,7 +76,13 @@ export function parseAdmin(type: TypedQuestion, fd: FormData): { config: object;
 		// Number(null) vaut 0 : sans ce test, « rien de coché » deviendrait « la 1re proposition ».
 		const correct = raw === null || raw === '' ? NaN : Number(raw);
 		if (!Number.isInteger(correct) || correct < 0 || correct >= options.length) throw new BadAnswer('QCM : coche la bonne proposition.');
-		return { config: { options } satisfies ChoiceConfig, solution: { correct } satisfies ChoiceSolution };
+		// Mélangées à l'enregistrement : la position de la bonne réponse ne dépend pas de l'admin
+		// (qui met souvent la bonne en premier).
+		const shown = shuffledOrder(options.length);
+		return {
+			config: { options: shown.map((i) => options[i]) } satisfies ChoiceConfig,
+			solution: { correct: shown.indexOf(correct) } satisfies ChoiceSolution
+		};
 	}
 	if (type === 'number') {
 		const value = num(fd.get('value'));
@@ -117,7 +124,7 @@ export function parseAdmin(type: TypedQuestion, fd: FormData): { config: object;
 }
 
 /**
- * Même question que celle enregistrée, malgré un autre mélange ? (ordre et associer) On garde alors
+ * Même question que celle enregistrée, malgré un autre mélange ? (QCM, ordre, associer) On garde alors
  * l'ancien mélange au lieu d'en tirer un nouveau à chaque enregistrement.
  */
 export function sameShuffledQuestion(type: QuestionType, prev: { config: unknown; solution: unknown }, next: { config: unknown; solution: unknown }) {
@@ -127,6 +134,14 @@ export function sameShuffledQuestion(type: QuestionType, prev: { config: unknown
 		if (!p.config?.items || !p.solution?.order) return false;
 		const asText = (q: typeof p) => q.solution.order.map((i) => q.config.items[i]).join('\u0000');
 		return asText(p) === asText(n);
+	}
+	if (type === 'choice') {
+		const p = prev as { config: ChoiceConfig; solution: ChoiceSolution };
+		const n = next as { config: ChoiceConfig; solution: ChoiceSolution };
+		if (!p.config?.options || p.solution?.correct === undefined) return false;
+		const set = (q: typeof p) => [...q.config.options].sort().join('\u0000');
+		const good = (q: typeof p) => q.config.options[q.solution.correct];
+		return set(p) === set(n) && good(p) === good(n);
 	}
 	if (type === 'match') {
 		const p = prev as { config: MatchConfig; solution: MatchSolution };

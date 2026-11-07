@@ -5,7 +5,8 @@ import { days, db, settings } from '$lib/server/db';
 import { BadInput, file, guard, hhmm, int, isoDate, str } from '$lib/server/form';
 import { getSettings, invalidateSettings } from '$lib/server/settings';
 import { isValidTimeZone, zonedTime } from '$lib/server/tz';
-import { MAX_IMAGE_BYTES, sniffImage } from '$lib/server/upload';
+import { MAX_IMAGE_BYTES } from '$lib/server/upload';
+import { sanitizeImage } from '$lib/server/images';
 
 export const load: PageServerLoad = async () => {
 	const { logo, ...s } = await getSettings();
@@ -42,9 +43,9 @@ export const actions: Actions = {
 			const logo = await file(fd, 'logo');
 			if (logo) {
 				if (logo.length > MAX_IMAGE_BYTES) throw new BadInput('Logo : 2 Mo maximum.');
-				const mime = sniffImage(logo);
-				if (!mime) throw new BadInput('Logo : JPG, PNG, WebP ou GIF uniquement.');
-				Object.assign(patch, { logo, logoMime: mime });
+				const clean = await sanitizeImage(logo);
+				if (!clean) throw new BadInput('Logo : JPG, PNG, WebP ou GIF uniquement.');
+				Object.assign(patch, { logo: clean.data, logoMime: clean.mime });
 			} else if (fd.get('removeLogo') === 'on') {
 				Object.assign(patch, { logo: null, logoMime: null });
 			}

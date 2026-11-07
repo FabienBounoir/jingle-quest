@@ -159,6 +159,22 @@ settings             (key PK, value jsonb)                            -- brandin
 - L'unicité de la réponse est garantie par la clé primaire. Les points sont calculés côté serveur, à partir de l'heure de réception.
 - Limite de débit sur `POST /answer`.
 
+### 5.4 bis Anti-triche (joueurs développeurs)
+
+On suppose que les joueurs lisent les outils de développement, les réponses réseau (`__data.json`, flux SSE) et le code source, et qu'ils envoient des requêtes à la main. Les garanties à préserver dans toute évolution :
+
+| Garantie | Comment |
+|---|---|
+| Aucune solution n'est envoyée avant la fin | `questions.solution` et `question_answers` ne sortent jamais du serveur ; la révélation n'a lieu qu'après `end_date` |
+| Rien d'une case future (texte, image, données) | redirection ou 404 côté serveur, même en appelant les adresses directement |
+| Les identifiants ne trahissent rien | les valeurs des listes sont envoyées sous un jeton aléatoire (`list_items.token`), jamais par leur id, qui suit l'ordre de création |
+| Aucun ordre ne trahit rien | QCM, ordre et associer sont mélangés à l'enregistrement par un tirage uniforme (aléa crypto, ordre d'origine compris) |
+| Pas de métadonnées dans les images | chaque image est réencodée à l'envoi, sans EXIF, GPS, auteur ni miniature (`images.ts`) |
+| Photo floue | seul le niveau enregistré en base est servi ; l'original jamais avant la fin |
+| Points et temps | calculés par le serveur, à l'heure du serveur ; une seule tentative (clé primaire) |
+
+Ce qui reste hors d'atteinte technique : l'entraide entre collègues, et les admins, qui voient toutes les solutions.
+
 ### 5.5 OpenShift
 
 On reprend la structure `openshift/` de `rae` (Kustomize, BuildConfig, ImageStream, Deployment, Service, Route, Secret, ConfigMap, StatefulSet Postgres).

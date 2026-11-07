@@ -209,7 +209,7 @@
 						<input type="text" name="option" bind:value={options[i]} maxlength="120" placeholder="Proposition {i + 1}{i < 2 ? '' : ' (optionnelle)'}" aria-label="Proposition {i + 1}" readonly={locked} />
 					</div>
 				{/each}
-				<p class="muted">Laisse vides les lignes en trop. Les propositions s'affichent dans cet ordre.</p>
+				<p class="muted">Laisse vides les lignes en trop. Elles seront mélangées à l'enregistrement (même ordre pour tous les joueurs) : la position de la bonne réponse ne trahit rien.</p>
 			{:else if type === 'number'}
 				<h2 id="ok-title">Bonne valeur</h2>
 				<div class="grid2">

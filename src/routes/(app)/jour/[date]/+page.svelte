@@ -15,7 +15,7 @@
 	let { data, form } = $props();
 	const answered = $derived(live.answered?.questionId === data.question.id ? live.answered.count : data.answered);
 
-	let value = $state<number | null>(null); // type « list » : la valeur choisie
+	let value = $state<string | null>(null); // types « list » et « blur » : jeton de la valeur choisie
 	let ready = $state(false); // autres types : le composant de saisie dit si la réponse est complète
 	let sending = $state(false);
 	const q = $derived(data.question);

@@ -42,7 +42,8 @@ describe('parseExport', () => {
 			{ type: 'order', text: 'Ordre ?', list: null, correct: [], config: { items: ['b', 'a', 'c'] }, solution: { order: [1, 0, 2] }, day: null, image: null }
 		);
 		const d = parseExport(f);
-		expect(d.questions[1].solution).toEqual({ correct: 2 });
+		const qcm = d.questions[1] as unknown as { config: { options: string[] }; solution: { correct: number } };
+		expect(qcm.config.options[qcm.solution.correct]).toBe('C'); // remélangé, mais toujours « C »
 		const o = d.questions[2] as unknown as { config: { items: string[] }; solution: { order: number[] } };
 		expect(o.solution.order.map((i) => o.config.items[i])).toEqual(['a', 'b', 'c']);
 		const bad = valid() as ReturnType<typeof valid> & { questions: unknown[] };
