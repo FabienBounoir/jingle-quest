@@ -49,7 +49,7 @@ On en fait **un template** : rien n'est propre à Sopra Steria dans le code. Nom
 | Ordre | 3 à 5 éléments à classer avec ↑ ↓ | part des éléments à la bonne place |
 | Zone | un clic sur l'image, l'admin a dessiné un rectangle | dedans = juste |
 | Associer | 3 à 5 paires, un menu déroulant par ligne (colonne de droite mélangée) | part des paires justes |
-| Photo floue | photo pixellisée que le joueur défloute lui-même (6 niveaux), réponse dans une liste | bonne réponse × 100 / 80 / 60 / 45 / 30 / 20 % selon le niveau atteint |
+| Photo floue | photo pixellisée que le joueur défloute lui-même (11 niveaux, nette au dernier seulement), réponse dans une liste | bonne réponse × 100 / 95 / 90 / 85 / 78 / 70 / 60 / 50 / 40 / 30 / 20 % selon le niveau atteint |
 
 Les points partiels s'appliquent au barème complet, bonus de rapidité compris. La solution est stockée à part (`questions.solution`) et n'est jamais envoyée au navigateur avant la fin. Les éléments à ordonner sont mélangés à l'enregistrement, donc l'ordre affiché ne trahit rien. Code : `src/lib/server/questionTypes.ts`. La photo floue est pixellisée **côté serveur** (`src/lib/server/blur.ts`, sharp) au niveau atteint par le joueur, enregistré en base (table `reveals`) : recharger, changer d'onglet ou modifier l'adresse de l'image ne fait pas regagner de points.
 

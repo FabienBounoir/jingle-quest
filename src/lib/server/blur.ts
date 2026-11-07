@@ -2,11 +2,8 @@
 // (table reveals). Un flou CSS ne protégerait rien (l'image nette serait téléchargeable) : ici le
 // navigateur ne reçoit jamais qu'une version déjà dégradée.
 import sharp from 'sharp';
-import { BLUR_STAGES } from '$lib/blur';
+import { BLUR_LEVELS } from '$lib/blur';
 
-/** Taille d'un pixel de la mosaïque, en fraction de la largeur de l'image ; 0 = nette (dernier niveau). */
-const BLOCKS = [1 / 8, 1 / 12, 1 / 18, 1 / 28, 1 / 45, 0];
-if (BLOCKS.length !== BLUR_STAGES) throw new Error('BLOCKS et BLUR_MULTIPLIERS doivent avoir autant de niveaux');
 const MAX_WIDTH = 900; // inutile de pixelliser plus grand que ce qu'affiche un écran
 
 // ponytail: cache process sans TTL (6 étapes × une poignée de photos, quelques centaines de Ko), vidé
@@ -25,7 +22,7 @@ export function pixelated(questionId: number, stage: number, original: Buffer): 
 			const width = Math.min(meta.autoOrient?.width ?? meta.width ?? MAX_WIDTH, MAX_WIDTH);
 			const resized = await base.resize({ width, withoutEnlargement: true }).toBuffer({ resolveWithObject: true });
 			const { width: w, height: h } = resized.info;
-			const block = Math.max(2, Math.round(w * BLOCKS[stage]));
+			const block = Math.max(2, Math.round(w * BLUR_LEVELS[stage].block));
 			const small = await sharp(resized.data).resize(Math.max(1, Math.ceil(w / block)), Math.max(1, Math.ceil(h / block)), { kernel: 'nearest' }).toBuffer();
 			return sharp(small).resize(w, h, { kernel: 'nearest' }).png().toBuffer();
 		})();

@@ -132,7 +132,7 @@
 			{#if type === 'blur'}
 				<p class="notice ok">
 					La photo démarre très pixellisée : chaque joueur peut la déflouter lui-même, au prix de points.
-					Points max d'une bonne réponse : 100 % → 80 % → 60 % → 45 % → 30 % → 20 % (nette).
+					11 niveaux : les premiers clics coûtent 5 %, puis de plus en plus (100 → 95 → 90 → 85 → 78 → 70 → 60 → 50 → 40 → 30 %), et la photo n'est nette qu'au dernier (20 %).
 				</p>
 			{/if}
 			{#if listLike}
