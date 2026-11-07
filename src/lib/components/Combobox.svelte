@@ -15,14 +15,16 @@
 
 	const MAX = 8;
 	let query = $state('');
-	let open = $state(false);
+	let typed = $state(false); // liste dépliée par la saisie ou les flèches, refermée par Échap / un choix
+	// Suggestions seulement à partir d'un caractère tapé : rien ne s'ouvre au simple focus.
+	const open = $derived(typed && query.trim().length > 0);
 	let active = $state(0);
 
 	// Index replié une seule fois par liste (2 000 noms : pas de normalisation à chaque frappe).
 	const folded = $derived(items.map((i) => ({ ...i, f: fold(i.label) })));
 	const results = $derived.by(() => {
 		const q = fold(query);
-		if (!q) return folded.slice(0, MAX);
+		if (!q) return [];
 		const starts: Item[] = [];
 		const contains: Item[] = [];
 		for (const i of folded) {
@@ -36,11 +38,11 @@
 	function pick(item: Item) {
 		value = item.id;
 		query = item.label;
-		open = false;
+		typed = false;
 	}
 
 	function onInput() {
-		open = true;
+		typed = true;
 		active = 0;
 		// Nom tapé en entier (casse et accents ignorés) : on le considère choisi.
 		const exact = folded.find((i) => i.f === fold(query));
@@ -50,7 +52,7 @@
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === 'ArrowDown') {
 			e.preventDefault();
-			open = true;
+			typed = true;
 			active = Math.min(active + 1, results.length - 1);
 		} else if (e.key === 'ArrowUp') {
 			e.preventDefault();
@@ -59,7 +61,7 @@
 			e.preventDefault(); // ne pas soumettre le formulaire en choisissant
 			pick(results[active]);
 		} else if (e.key === 'Escape') {
-			open = false;
+			typed = false;
 		}
 	}
 </script>
@@ -84,8 +86,7 @@
 			{disabled}
 			bind:value={query}
 			oninput={onInput}
-			onfocus={() => (open = true)}
-			onblur={() => (open = false)}
+			onblur={() => (typed = false)}
 			onkeydown={onKeydown}
 		/>
 		{#if value !== null}<span class="chosen">choisi</span>{/if}
