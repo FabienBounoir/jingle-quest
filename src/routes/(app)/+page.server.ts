@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { bonusAt, cellState, eventEnd } from '$lib/server/game';
+import { bonusAt, cellState, endOf } from '$lib/server/game';
 import { answeredCount, getDays, getStandings, playerCount, userAnswers } from '$lib/server/play';
 import { getSettings } from '$lib/server/settings';
 import { localParts } from '$lib/server/tz';
@@ -9,7 +9,7 @@ const DOW = ['DIM.', 'LUN.', 'MAR.', 'MER.', 'JEU.', 'VEN.', 'SAM.'];
 export const load: PageServerLoad = async ({ locals }) => {
 	const s = await getSettings();
 	const now = new Date();
-	const end = eventEnd(s.endDate, s.timezone);
+	const end = endOf(s);
 	const [dayRows, mine, standings, players] = await Promise.all([getDays(), userAnswers(locals.user!.id), getStandings(), playerCount()]);
 	const byQuestion = new Map(mine.map((a) => [a.questionId, a]));
 

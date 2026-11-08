@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { cellState, eventEnd } from '$lib/server/game';
+import { cellState, endOf } from '$lib/server/game';
 import { getDays, userAnswers } from '$lib/server/play';
 import { getSettings } from '$lib/server/settings';
 import { localParts } from '$lib/server/tz';
@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// La prochaine à s'ouvrir, pas la prochaine par date (une case peut être décalée à une autre heure).
 	const next = dayRows.filter((d) => d.opensAt > now).sort((a, b) => a.opensAt.getTime() - b.opensAt.getTime())[0];
 	if (!next) redirect(303, '/'); // plus rien à attendre : l'accueil affiche la fin ou le dernier jour
-	const end = eventEnd(s.endDate, s.timezone);
+	const end = endOf(s);
 	const answered = new Set(mine.map((a) => a.questionId));
 	const catchUp = dayRows.filter(
 		(d) => d.questionId && cellState({ date: d.date, opensAt: d.opensAt, hasQuestion: true }, answered.has(d.questionId) ? { score: 1, isCorrect: true } : null, now, end, s.timezone) === 'catch'

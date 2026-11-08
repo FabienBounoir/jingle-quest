@@ -17,7 +17,12 @@ export function bonusAt(elapsedMs: number, s: Scoring): number {
 	return Math.round(s.bonusMax * Math.max(0, 1 - Math.max(0, elapsedMs) / (s.bonusMinutes * 60_000)));
 }
 
-/** Fin de l'événement : minuit (fuseau de l'événement) après le dernier jour. Réponses révélées, rattrapage fermé. */
+/** Fin de l'événement telle que réglée par l'admin, sinon minuit après la dernière case. À utiliser partout. */
+export function endOf(s: { endDate: string; timezone: string; endsAt: Date | null }): Date {
+	return s.endsAt ?? eventEnd(s.endDate, s.timezone);
+}
+
+/** Fin par défaut : minuit (fuseau de l'événement) après le dernier jour. Réponses révélées, rattrapage fermé. */
 export function eventEnd(endDate: string, timezone: string): Date {
 	const next = new Date(Date.parse(`${endDate}T12:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 	return zonedTime(next, '00:00', timezone);

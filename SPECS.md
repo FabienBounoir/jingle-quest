@@ -262,7 +262,7 @@ settings         id int PK CHECK (id = 1)                          -- une seule 
 - `settings` est une ligne typée plutôt qu'un key/value en jsonb : la base valide les types, et il n'y a pas de parsing à écrire.
 - `days` est (re)générée par le bouton admin « Générer le calendrier » à partir de `start_date`, `end_date` et `workdays_only`. C'est un upsert qui conserve `question_id` et `excluded`. On modifie l'heure d'ouverture d'un jour en changeant son `opens_at`.
 - On vérifie dans l'application que les bonnes réponses appartiennent à la liste de la question (ponytail : une FK composite serait possible, mais c'est 3 lignes de code contre une colonne dénormalisée).
-- **Fin de l'événement** : `end_date` à 23:59:59 dans `timezone`. C'est à ce moment que les réponses sont révélées et que le rattrapage se ferme.
+- **Fin de l'événement** : `settings.ends_at`, réglable dans l'admin (par exemple quelques jours après la dernière case, pour laisser rattraper), sinon minuit après `end_date`. C'est à ce moment que le rattrapage se ferme et que les réponses et le bilan sont révélés. Toutes les règles passent par `endOf()` (`game.ts`).
 
 ### 7.3 Règles de jeu (`src/lib/server/game.ts`, pur et testé)
 

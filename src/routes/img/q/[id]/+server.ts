@@ -5,7 +5,7 @@ import { LAST_STAGE } from '$lib/blur';
 import { pixelated } from '$lib/server/blur';
 import { days, db, questions } from '$lib/server/db';
 import { revealStage } from '$lib/server/play';
-import { eventEnd } from '$lib/server/game';
+import { endOf } from '$lib/server/game';
 import { getSettings } from '$lib/server/settings';
 
 // L'image fait partie de la question : servie aux joueurs seulement une fois la case ouverte
@@ -29,7 +29,7 @@ export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const asPlayer = !locals.isAdmin || url.searchParams.has('stage');
 	if (q.type === 'blur' && asPlayer) {
 		const s = await getSettings();
-		const ended = now >= eventEnd(s.endDate, s.timezone).getTime();
+		const ended = now >= endOf(s).getTime();
 		// Aperçu admin avant l'ouverture : niveau choisi dans la page (rien n'est enregistré). Sinon, la base.
 		const previewStage = locals.isAdmin && !open ? Math.min(LAST_STAGE, Math.max(0, Number(url.searchParams.get('stage')) || 0)) : null;
 		const stage = ended ? LAST_STAGE : (previewStage ?? (await revealStage(locals.user!.id, id)));

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import Notice from '$lib/components/Notice.svelte';
+	import { dayLabel } from '$lib/dates';
 	let { data, form } = $props();
 	const s = $derived(data.s);
 	// svelte-ignore state_referenced_locally
@@ -43,11 +44,21 @@
 		<h2 id="cal-title">Calendrier</h2>
 		<div class="grid2">
 			<label class="field"><span>début</span><input type="date" name="startDate" value={s.startDate} required /></label>
-			<label class="field"><span>fin (réponses révélées le soir)</span><input type="date" name="endDate" value={s.endDate} required /></label>
+			<label class="field"><span>dernière case</span><input type="date" name="endDate" value={s.endDate} required /></label>
 			<label class="field"><span>ouverture par défaut</span><input type="time" name="defaultOpenTime" value={s.defaultOpenTime.slice(0, 5)} required /></label>
 			<label class="field"><span>fuseau horaire</span><input type="text" name="timezone" value={s.timezone} required /></label>
 		</div>
 		<label class="check"><input type="checkbox" name="workdaysOnly" checked={s.workdaysOnly} /> jours ouvrés uniquement (pas de case le week-end)</label>
+
+		<fieldset class="ends">
+			<legend class="hand">fin de l'événement</legend>
+			<p class="muted">Rattrapage fermé, bonnes réponses et bilan révélés. Vide : minuit après la dernière case. Mets plus tard pour laisser quelques jours de rattrapage.</p>
+			<div class="row">
+				<label class="field"><span>date</span><input type="date" name="endsDate" value={data.endsAt?.date ?? ''} /></label>
+				<label class="field"><span>heure</span><input type="time" name="endsTime" value={data.endsAt?.time ?? ''} /></label>
+			</div>
+			<p class="effective">Fin actuelle : <strong>{dayLabel(data.effectiveEnd.date)} à {data.effectiveEnd.time.replace(':', 'h')}</strong>{data.endsAt ? '' : ' (par défaut)'}</p>
+		</fieldset>
 	</section>
 
 	<section class="card stack" aria-labelledby="score-title">
@@ -76,6 +87,10 @@
 
 <style>
 	h2 { font-size: 22px; }
+	.ends { border: 3px dashed var(--ink); border-radius: 16px; padding: 12px 16px; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+	.ends legend { font-size: 20px; padding: 0 6px; }
+	.ends .muted, .effective { margin: 0; }
+	.ends .field { flex: 1 1 160px; }
 	.swatch { width: 44px; height: 44px; border: 3px solid var(--ink); border-radius: 12px; cursor: pointer; }
 	.swatch[aria-pressed='true'] { box-shadow: 0 0 0 3px var(--paper), 0 0 0 6px var(--ink); }
 	input[type='color'] { width: 52px; height: 48px; padding: 2px; border: 3px solid var(--ink); border-radius: 12px; background: var(--white); }

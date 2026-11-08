@@ -1,6 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { bonusAt, eventEnd, isSameDay } from '$lib/server/game';
+import { bonusAt, endOf, isSameDay } from '$lib/server/game';
 import { answeredCount, getDay, getDays, getQuestion, getStandings, myAnswerText, reveal, revealStage, submitAnswer, unblur, userAnswers } from '$lib/server/play';
 import { getSettings } from '$lib/server/settings';
 
@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	if (preview && !locals.isAdmin) redirect(303, '/attente');
 
 	const s = await getSettings();
-	const end = eventEnd(s.endDate, s.timezone);
+	const end = endOf(s);
 	const ended = now >= end;
 	const [q, mine, answered, allDays] = await Promise.all([getQuestion(day.questionId), userAnswers(locals.user!.id), answeredCount(day.questionId), getDays()]);
 	const a = mine.find((x) => x.questionId === day.questionId);

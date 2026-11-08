@@ -184,6 +184,11 @@ export const settings = pgTable(
 		startDate: date('start_date').notNull().default(sql`make_date(extract(year from now())::int, 12, 1)`),
 		endDate: date('end_date').notNull().default(sql`make_date(extract(year from now())::int, 12, 24)`),
 		workdaysOnly: boolean('workdays_only').notNull().default(true),
+		/**
+		 * Fin de l'événement : rattrapage fermé, bonnes réponses et bilan révélés. null = minuit (fuseau de
+		 * l'événement) après `end_date`. Réglable pour laisser quelques jours de rattrapage en plus.
+		 */
+		endsAt: tstz('ends_at'),
 		defaultOpenTime: time('default_open_time').notNull().default('09:00'),
 		pointsCorrect: integer('points_correct').notNull().default(100),
 		pointsCatchup: integer('points_catchup').notNull().default(50),

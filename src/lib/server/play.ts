@@ -2,7 +2,7 @@
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { answerLists, answers, days, db, listItems, questionAnswers, questions, reveals, users } from '$lib/server/db';
 import { BLUR_MULTIPLIERS, LAST_STAGE } from '$lib/blur';
-import { cellState, eventEnd, isSameDay, points, recap, type CellState } from './game';
+import { cellState, endOf, isSameDay, points, recap, type CellState } from './game';
 import { inArray } from 'drizzle-orm';
 import { BadAnswer, answerText, scoreAnswer, solutionText, type TypedQuestion, type ZoneSolution } from './questionTypes';
 import { LIST_TYPES, type QuestionType } from './db/schema';
@@ -168,7 +168,7 @@ export type HistoryRow = {
 export async function history(userId: string) {
 	const s = await getSettings();
 	const now = new Date();
-	const end = eventEnd(s.endDate, s.timezone);
+	const end = endOf(s);
 	const ended = now >= end;
 	const all = await getDays();
 	const opened = all.filter((d) => d.questionId && d.opensAt <= now);
@@ -223,7 +223,7 @@ export async function unblur(userId: string, date: string): Promise<UnblurResult
 	const now = new Date();
 	const day = await getDay(date);
 	if (!day?.questionId) return { ok: false, status: 404, error: 'Pas de quête ce jour-là.' };
-	if (day.opensAt > now || now >= eventEnd(s.endDate, s.timezone)) return { ok: false, status: 403, error: 'Cette case n’est pas jouable.' };
+	if (day.opensAt > now || now >= endOf(s)) return { ok: false, status: 403, error: 'Cette case n’est pas jouable.' };
 	const q = await loadQuestion(day.questionId);
 	if (q.type !== 'blur') return { ok: false, status: 400, error: 'Pas de photo à déflouter ici.' };
 	const [done] = await db
@@ -260,7 +260,7 @@ export async function submitAnswer(
 	const day = await getDay(date);
 	if (!day?.questionId) return { ok: false, status: 404, error: 'Pas de quête ce jour-là.' };
 	if (!opts.dryRun && day.opensAt > now) return { ok: false, status: 403, error: 'Cette case n’est pas encore ouverte.' };
-	if (!opts.dryRun && now >= eventEnd(s.endDate, s.timezone)) return { ok: false, status: 403, error: 'L’événement est terminé.' };
+	if (!opts.dryRun && now >= endOf(s)) return { ok: false, status: 403, error: 'L’événement est terminé.' };
 
 	const q = await loadQuestion(day.questionId);
 	let score: number;

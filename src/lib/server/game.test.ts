@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fold } from '$lib/text';
-import { bonusAt, cellState, eventEnd, isSameDay, points, rankBoard, recap } from './game';
+import { bonusAt, cellState, endOf, eventEnd, isSameDay, points, rankBoard, recap } from './game';
 
 const s = { pointsCorrect: 100, pointsCatchup: 50, bonusMax: 50, bonusMinutes: 60 };
 const min = 60_000;
@@ -27,6 +27,12 @@ describe('points', () => {
 describe('eventEnd / isSameDay', () => {
 	it('fin = minuit heure de Paris après le dernier jour', () => {
 		expect(eventEnd('2026-12-24', 'Europe/Paris').toISOString()).toBe('2026-12-24T23:00:00.000Z');
+	});
+	it('fin réglée à la main prioritaire, sinon minuit après la dernière case', () => {
+		const base = { endDate: '2026-12-24', timezone: 'Europe/Paris' };
+		expect(endOf({ ...base, endsAt: null }).toISOString()).toBe('2026-12-24T23:00:00.000Z');
+		const custom = new Date('2026-12-31T17:00:00Z');
+		expect(endOf({ ...base, endsAt: custom })).toBe(custom);
 	});
 	it('jour J selon le fuseau de l’événement, pas UTC', () => {
 		expect(isSameDay('2026-12-01', new Date('2026-12-01T22:59:00Z'), 'Europe/Paris')).toBe(true);

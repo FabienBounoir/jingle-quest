@@ -27,6 +27,8 @@ export type ExportFile = {
 		pointsCatchup: number;
 		bonusMax: number;
 		bonusMinutes: number;
+		/** Fin de l'événement réglée à la main (ISO), ou null pour « minuit après la dernière case ». */
+		endsAt?: string | null;
 		logo: Image | null;
 	};
 	lists: { name: string; items: string[] }[];
@@ -71,6 +73,7 @@ export async function exportData(): Promise<ExportFile> {
 			pointsCatchup: s.pointsCatchup,
 			bonusMax: s.bonusMax,
 			bonusMinutes: s.bonusMinutes,
+			endsAt: s.endsAt?.toISOString() ?? null,
 			logo: img(s.logo, s.logoMime)
 		},
 		lists: lists.map((l) => ({ name: l.name, items: items.filter((i) => i.listId === l.id).map((i) => i.label) })),
@@ -160,6 +163,8 @@ export function parseExport(raw: unknown) {
 		!isInt(s.bonusMinutes, 1, 1440)
 	)
 		throw new ImportError('Réglages invalides dans le fichier.');
+	if (s.endsAt != null && (typeof s.endsAt !== 'string' || Number.isNaN(Date.parse(s.endsAt))))
+		throw new ImportError('Fin de l’événement invalide dans le fichier.');
 
 	if (!Array.isArray(f.lists) || !Array.isArray(f.questions) || !Array.isArray(f.days)) throw new ImportError('Fichier incomplet.');
 	const lists = new Map<string, Set<string>>();
@@ -202,7 +207,7 @@ export function parseExport(raw: unknown) {
 		}
 	});
 	return {
-		settings: { ...s, logo: image(s.logo, 'Logo') },
+		settings: { ...s, endsAt: s.endsAt ? new Date(s.endsAt) : null, logo: image(s.logo, 'Logo') },
 		lists: [...lists].map(([name, items]) => ({ name, items: [...items] })),
 		questions: qs,
 		days: f.days
