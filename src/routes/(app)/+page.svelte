@@ -53,9 +53,12 @@
 				{/if}
 			{:else if data.ended}
 				<p class="hand kicker">c'est fini !</p>
-				<h1 id="today-title">Joyeux Noël 🎄</h1>
-				<p>Les bonnes réponses sont dévoilées : ouvre les cases pour les découvrir.</p>
-				<a class="btn" href="/classement">Voir le classement final</a>
+				<h1 id="today-title">Joyeux Noël !</h1>
+				<p>Les bonnes réponses sont dévoilées : retrouve-les dans tes réponses.</p>
+				<div class="row">
+					<a class="btn big" href="/bilan">Voir mon bilan</a>
+					<a class="btn secondary" href="/mes-reponses">Mes réponses</a>
+				</div>
 			{:else if data.next && nextIn}
 				<p class="hand kicker">prochaine case…</p>
 				<h1 id="today-title">{dayLabel(data.next.date)}</h1>

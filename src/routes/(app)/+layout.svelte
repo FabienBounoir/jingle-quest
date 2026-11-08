@@ -38,6 +38,7 @@
 	const tabs = [
 		{ href: '/', label: 'Calendrier', icon: 'gift' },
 		{ href: '/classement', label: 'Classement', icon: 'podium' },
+		{ href: '/mes-reponses', label: 'Réponses', icon: 'list' },
 		{ href: '/attente', label: 'Prochaine', icon: 'clock' }
 	];
 	const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
@@ -55,6 +56,7 @@
 	<nav aria-label="Navigation principale" class="desk-nav">
 		<a href="/" class="btn small {isCurrent('/') ? '' : 'secondary'}" aria-current={isCurrent('/') ? 'page' : undefined}>Calendrier</a>
 		<a href="/classement" class="btn small {isCurrent('/classement') ? '' : 'secondary'}" aria-current={isCurrent('/classement') ? 'page' : undefined}>Classement</a>
+		<a href="/mes-reponses" class="btn small {isCurrent('/mes-reponses') ? '' : 'secondary'}" aria-current={isCurrent('/mes-reponses') ? 'page' : undefined}>Mes réponses</a>
 		{#if data.isAdmin}<a href="/admin" class="btn small secondary">Admin</a>{/if}
 	</nav>
 	<div class="right">
@@ -79,6 +81,7 @@
 			<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
 				{#if t.icon === 'gift'}<rect x="3" y="8" width="18" height="13" rx="2" /><path d="M12 8v13M3 13h18M12 8c-2-4-6-4-6-1s6 1 6 1 6 2 6-1-4-3-6 1" />
 				{:else if t.icon === 'podium'}<path d="M8 21V11H3v10zM15 21V5H9v16zM21 21v-7h-5v7z" />
+				{:else if t.icon === 'list'}<path d="M9 6h11M9 12h11M9 18h11" /><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" />
 				{:else}<circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5M9 2h6" />{/if}
 			</svg>
 			{t.label}
@@ -110,7 +113,7 @@
 		.page { padding: 18px 14px 120px; }
 		.tabbar {
 			position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom));
-			z-index: 10; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding: 6px;
+			z-index: 10; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 6px;
 			border: 3.5px solid var(--ink); border-radius: 22px; background: var(--paper); box-shadow: 0 5px 0 var(--ink);
 		}
 		.tabbar a {

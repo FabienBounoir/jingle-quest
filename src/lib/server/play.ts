@@ -2,7 +2,8 @@
 import { and, asc, count, eq, sql } from 'drizzle-orm';
 import { answerLists, answers, days, db, listItems, questionAnswers, questions, reveals, users } from '$lib/server/db';
 import { BLUR_MULTIPLIERS, LAST_STAGE } from '$lib/blur';
-import { eventEnd, isSameDay, points } from './game';
+import { cellState, eventEnd, isSameDay, points, recap, type CellState } from './game';
+import { inArray } from 'drizzle-orm';
 import { BadAnswer, answerText, scoreAnswer, solutionText, type TypedQuestion, type ZoneSolution } from './questionTypes';
 import { LIST_TYPES, type QuestionType } from './db/schema';
 import { getAnswered, getRanking, onAnswer } from './live';
@@ -104,7 +105,16 @@ export async function getDay(date: string) {
 
 export async function userAnswers(userId: string) {
 	return db
-		.select({ questionId: answers.questionId, itemId: answers.itemId, value: answers.value, score: answers.score, isCorrect: answers.isCorrect, points: answers.points })
+		.select({
+			questionId: answers.questionId,
+			itemId: answers.itemId,
+			value: answers.value,
+			score: answers.score,
+			isCorrect: answers.isCorrect,
+			points: answers.points,
+			elapsedMs: answers.elapsedMs,
+			answeredAt: answers.answeredAt
+		})
 		.from(answers)
 		.where(eq(answers.userId, userId));
 }
@@ -136,6 +146,59 @@ export async function reveal(questionId: number): Promise<{ text: string | null;
 		.where(eq(questionAnswers.questionId, questionId))
 		.orderBy(asc(listItems.label));
 	return { text: rows.map((r) => r.label).join(' · '), zone: null };
+}
+
+// ---------- Historique et bilan ----------
+
+export type HistoryRow = {
+	date: string;
+	number: number;
+	type: QuestionType;
+	text: string;
+	state: CellState;
+	answer: string | null; // texte de la réponse du joueur (null : pas répondu, ou zone)
+	points: number;
+	solution: string | null; // seulement une fois l'événement terminé
+};
+
+/**
+ * Toutes les cases déjà ouvertes avec une quête, et ce que le joueur y a fait. Les solutions ne sont
+ * jointes qu'après la fin de l'événement (même règle que la page de la quête).
+ */
+export async function history(userId: string) {
+	const s = await getSettings();
+	const now = new Date();
+	const end = eventEnd(s.endDate, s.timezone);
+	const ended = now >= end;
+	const all = await getDays();
+	const opened = all.filter((d) => d.questionId && d.opensAt <= now);
+	const mine = await userAnswers(userId);
+	const byQuestion = new Map(mine.map((a) => [a.questionId, a]));
+	// Libellés des réponses « liste » en une requête (pas une par case).
+	const itemIds = mine.map((a) => a.itemId).filter((x): x is number => x !== null);
+	const labels = new Map(
+		itemIds.length ? (await db.select({ id: listItems.id, label: listItems.label }).from(listItems).where(inArray(listItems.id, itemIds))).map((r) => [r.id, r.label]) : []
+	);
+
+	const rows: HistoryRow[] = [];
+	const recapAnswers = [];
+	for (const d of opened) {
+		const q = await getQuestion(d.questionId!);
+		const a = byQuestion.get(q.id) ?? null;
+		const answer = !a ? null : LIST_TYPES.includes(q.type) ? (labels.get(a.itemId ?? -1) ?? '?') : answerText(q.type as TypedQuestion, q.config, a.value);
+		rows.push({
+			date: d.date,
+			number: all.findIndex((x) => x.date === d.date) + 1,
+			type: q.type,
+			text: q.text,
+			state: cellState({ date: d.date, opensAt: d.opensAt, hasQuestion: true }, a, now, end, s.timezone),
+			answer,
+			points: a?.points ?? 0,
+			solution: ended ? (await reveal(q.id)).text : null
+		});
+		if (a) recapAnswers.push({ date: d.date, points: a.points, isCorrect: a.isCorrect, elapsedMs: a.elapsedMs, sameDay: isSameDay(d.date, a.answeredAt, s.timezone) });
+	}
+	return { rows, ended, recap: recap(opened.map((d) => d.date), recapAnswers) };
 }
 
 // ---------- Photo qui se dévoile ----------

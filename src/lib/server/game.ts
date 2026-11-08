@@ -83,3 +83,31 @@ export function rankBoard(entries: BoardEntry[]): Ranked[] {
 			return { ...x, rank: i + 1, delta: prev === undefined ? null : prev - (i + 1) };
 		});
 }
+
+export type RecapAnswer = { date: string; points: number; isCorrect: boolean; elapsedMs: number; sameDay: boolean };
+
+/**
+ * Récap personnel de fin d'événement. `days` : les cases ouvertes avec une quête, dans l'ordre du
+ * calendrier ; `answers` : les réponses du joueur (une par case au plus).
+ */
+export function recap(days: string[], answers: RecapAnswer[]) {
+	const byDate = new Map(answers.map((a) => [a.date, a]));
+	let streak = 0;
+	let best = 0;
+	for (const d of days) {
+		streak = byDate.get(d)?.isCorrect ? streak + 1 : 0;
+		best = Math.max(best, streak);
+	}
+	const top = answers.reduce<RecapAnswer | null>((m, a) => (a.points > (m?.points ?? 0) ? a : m), null);
+	// Réponse la plus rapide : juste, et donnée le jour même (un rattrapage n'a pas de « vitesse »).
+	const fastest = answers.filter((a) => a.isCorrect && a.sameDay).reduce<RecapAnswer | null>((m, a) => (!m || a.elapsedMs < m.elapsedMs ? a : m), null);
+	return {
+		total: days.length,
+		answered: answers.length,
+		correct: answers.filter((a) => a.isCorrect).length,
+		points: answers.reduce((s, a) => s + a.points, 0),
+		bestStreak: best,
+		topDay: top ? { date: top.date, points: top.points } : null,
+		fastest: fastest ? { date: fastest.date, elapsedMs: fastest.elapsedMs } : null
+	};
+}

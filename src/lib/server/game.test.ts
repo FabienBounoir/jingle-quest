@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fold } from '$lib/text';
-import { bonusAt, cellState, eventEnd, isSameDay, points, rankBoard } from './game';
+import { bonusAt, cellState, eventEnd, isSameDay, points, rankBoard, recap } from './game';
 
 const s = { pointsCorrect: 100, pointsCatchup: 50, bonusMax: 50, bonusMinutes: 60 };
 const min = 60_000;
@@ -75,5 +75,28 @@ describe('rankBoard', () => {
 			['b', 3, 0],
 			['d', 4, null]
 		]);
+	});
+});
+
+describe('recap', () => {
+	const a = (date: string, points: number, isCorrect: boolean, elapsedMs = 60_000, sameDay = true) => ({ date, points, isCorrect, elapsedMs, sameDay });
+	it('compte la plus longue série, la meilleure quête et la réponse la plus rapide du jour J', () => {
+		const days = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6'];
+		const r = recap(days, [
+			a('d1', 120, true, 90_000),
+			a('d2', 140, true, 20_000),
+			a('d3', 0, false),
+			a('d4', 50, true, 5_000, false), // rattrapage : pas de « plus rapide »
+			a('d5', 110, true, 300_000)
+			// d6 : pas répondu, casse la série
+		]);
+		expect(r).toEqual({
+			total: 6, answered: 5, correct: 4, points: 420, bestStreak: 2,
+			topDay: { date: 'd2', points: 140 },
+			fastest: { date: 'd2', elapsedMs: 20_000 }
+		});
+	});
+	it('reste sobre pour qui n’a pas joué', () => {
+		expect(recap(['d1'], [])).toEqual({ total: 1, answered: 0, correct: 0, points: 0, bestStreak: 0, topDay: null, fastest: null });
 	});
 });
