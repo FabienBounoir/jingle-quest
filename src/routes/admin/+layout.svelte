@@ -27,6 +27,8 @@
 			{#each nav as n (n.href)}
 				<a href={n.href} aria-current={current(n.href) ? 'page' : undefined}>{n.label}</a>
 			{/each}
+			<!-- Pages joueur, visibles en aperçu par un admin avant la fin de l'événement. -->
+			<a href="/bilan" class="preview">Aperçu du bilan de fin ↗</a>
 		</nav>
 		<main>{@render children()}</main>
 	</div>
@@ -39,6 +41,7 @@
 	.layout { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
 	.side { flex: 1 1 200px; max-width: 260px; padding: 10px; display: flex; flex-direction: column; gap: 4px; border-radius: 22px; }
 	.side a { padding: 10px 14px; border: 3px solid transparent; border-radius: 12px; font-family: var(--font-title); font-weight: 500; text-decoration: none; }
+	.side a.preview { margin-top: 6px; border-top: 2.5px dashed var(--ink); border-radius: 0 0 12px 12px; font-size: 14px; }
 	.side a[aria-current='page'] { background: var(--gold); border-color: var(--ink); font-weight: 600; }
 	main { flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
 	/* Téléphone : le menu passe en ligne au-dessus du contenu. */
