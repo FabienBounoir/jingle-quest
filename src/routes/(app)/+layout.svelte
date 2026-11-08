@@ -21,7 +21,8 @@
 		const { seq, date } = live.opened;
 		if (seq === seenSeq) return;
 		seenSeq = seq;
-		if (page.url.pathname.startsWith('/attente')) goto(`/jour/${date}`, { invalidateAll: true });
+		// Salle d'attente : on laisse voir « C'est parti ! » (cf. attente/+page.svelte) ; elle bascule d'elle-même.
+		if (page.url.pathname.startsWith('/attente')) setTimeout(() => goto(`/jour/${date}`, { invalidateAll: true }), 800);
 		else invalidateAll();
 	});
 	const me = $derived(live.me !== undefined ? (live.me ?? { points: 0, rank: null }) : data.me);
