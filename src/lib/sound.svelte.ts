@@ -10,6 +10,7 @@ export const sound = $state({ enabled: true, unlocked: false });
 
 let ctx: AudioContext | null = null;
 let clickBuffer: AudioBuffer | null = null;
+let countdownBuffer: AudioBuffer | null = null;
 
 function audio(): AudioContext | null {
 	if (typeof window === 'undefined') return null;
@@ -81,4 +82,22 @@ export function playCountdown(offset = 0) {
 	const t0 = c.currentTime - offset;
 	for (const i of [0, 1, 2]) if (i >= offset - 0.05) tone(c, t0 + i, 660, 0.18, 0.25);
 	for (const [i, f] of [523.25, 659.25, 783.99, 1046.5].entries()) tone(c, t0 + 3 + i * 0.07, f, 0.7, 0.18, 'sine');
+}
+
+export async function playCountdownSound() {
+	const c = audio();
+	if (!c || !sound.enabled) return;
+	if (!countdownBuffer) {
+		try {
+			countdownBuffer = await c.decodeAudioData(await (await fetch('/sounds/countdown.mp3')).arrayBuffer());
+		} catch {
+			return; // pas de son plutôt qu'une erreur
+		}
+	}
+	const src = c.createBufferSource();
+	const gain = c.createGain();
+	gain.gain.value = 0.5;
+	src.buffer = countdownBuffer;
+	src.connect(gain).connect(c.destination);
+	src.start();
 }

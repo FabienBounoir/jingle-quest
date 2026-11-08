@@ -172,6 +172,7 @@ On suppose que les joueurs lisent les outils de développement, les réponses r�
 | Pas de métadonnées dans les images | chaque image est réencodée à l'envoi, sans EXIF, GPS, auteur ni miniature (`images.ts`) |
 | Photo floue | seul le niveau enregistré en base est servi ; l'original jamais avant la fin |
 | Points et temps | calculés par le serveur, à l'heure du serveur ; une seule tentative (clé primaire) |
+| Pages admin | `hooks.server.ts` bloque pour les non-admins les actions et les requêtes de données (`__data.json`) de `/admin` : les load de page s'exécutent **en parallèle** de celui du layout, et leurs données partiraient même si le layout répond 403. Toute route `+server` sous `/admin` vérifie `isAdmin` elle-même |
 
 Ce qui reste hors d'atteinte technique : l'entraide entre collègues, et les admins, qui voient toutes les solutions.
 

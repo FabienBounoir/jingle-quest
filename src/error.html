@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Le traîneau a calé</title>
+		<!-- Page de secours quand le serveur lui-même plante (base injoignable…) : autonome, sans JS ni
+		     données. Polices et fond servis en statique, donc toujours disponibles. -->
+		<style>
+			@font-face { font-family: Fredoka; src: url('/fonts/fredoka.woff2') format('woff2'); font-weight: 300 700; }
+			@font-face { font-family: Nunito; src: url('/fonts/nunito.woff2') format('woff2'); font-weight: 200 1000; }
+			@font-face { font-family: 'Gochi Hand'; src: url('/fonts/gochi-hand.woff2') format('woff2'); }
+			body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #c62f3b url('/doodle.svg') repeat; color: #2a1a1f; font: 700 16px/1.45 Nunito, system-ui, sans-serif; text-align: center; }
+			main { max-width: 480px; padding: 32px 20px; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+			h1 { margin: 0; font: 700 clamp(34px, 9vw, 50px)/1.1 Fredoka, sans-serif; color: #fff; text-shadow: 3px 3px 0 #2a1a1f; -webkit-text-stroke: 1.5px #2a1a1f; paint-order: stroke fill; }
+			.hand { margin: 0; color: #fff; font: 400 24px 'Gochi Hand', cursive; }
+			.card { background: #fff8ec; border: 4px solid #2a1a1f; border-radius: 26px; box-shadow: 8px 8px 0 #2a1a1f; padding: 22px; }
+			.card p { margin: 0 0 16px; }
+			a { display: inline-block; padding: 12px 24px; border: 3.5px solid #2a1a1f; border-radius: 16px; background: #ffc542; box-shadow: 0 5px 0 #2a1a1f; color: #2a1a1f; font: 700 18px Fredoka, sans-serif; text-decoration: none; }
+		</style>
+	</head>
+	<body>
+		<main>
+			<h1>Le traîneau a calé</h1>
+			<p class="hand">on répare et on revient…</p>
+			<div class="card">
+				<p>Le serveur ne répond pas pour le moment (erreur %sveltekit.status%). Réessaie dans un instant.</p>
+				<a href="/">Réessayer</a>
+			</div>
+		</main>
+	</body>
+</html>

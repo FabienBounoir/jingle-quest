@@ -31,8 +31,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 		if (path.startsWith('/api/')) error(401, 'Non connecté');
 		redirect(303, `/login?next=${encodeURIComponent(path + event.url.search)}`);
 	}
-	// Garde unique pour tout /admin : aucune page admin n'a à revérifier.
-	if (path.startsWith('/admin') && !event.locals.isAdmin) error(403, 'Réservé aux admins');
+	// /admin, non-admin. ATTENTION, piège SvelteKit : les load de page s'exécutent EN PARALLÈLE de celui
+	// du layout, et leurs données partent dans __data.json même si le layout lève une 403 (questions,
+	// solutions…). Donc ici on bloque tout, SAUF l'affichage HTML direct d'une page : celui-là passe pour
+	// qu'admin/+layout.server.ts réponde 403 dans la page d'erreur du site (une erreur levée dans ce hook
+	// afficherait la page de secours brute src/error.html). Le rendu HTML d'une page en erreur n'embarque
+	// pas les données de la page (vérifié). Les routes +server sous /admin revérifient elles-mêmes.
+	if (path.startsWith('/admin') && !event.locals.isAdmin && (event.request.method !== 'GET' || event.isDataRequest))
+		error(403, 'Réservé aux admins');
 
 	const response = await resolve(event);
 	// Toute écriture admin peut changer ce que voient les joueurs : on vide les caches ici, une fois,

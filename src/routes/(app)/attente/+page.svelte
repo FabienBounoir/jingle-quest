@@ -4,7 +4,7 @@
 	import { dayLabel, dayShort } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
 	import PushButton from '$lib/components/PushButton.svelte';
-	import { playCountdown, sound, unlockSound } from '$lib/sound.svelte';
+	import { playCountdown, playCountdownSound, sound, unlockSound } from '$lib/sound.svelte';
 	import Countdown321 from '$lib/components/Countdown321.svelte';
 	let { data } = $props();
 	// La présence me compte aussi : « attendent avec toi » = les autres.
@@ -22,7 +22,8 @@
 	$effect(() => {
 		if (!counted && left <= 3000 && left > -500) {
 			counted = true;
-			playCountdown(Math.max(0, 3 - left / 1000)); // arrivé en cours de route : on rejoint le compte
+			playCountdownSound();
+			// playCountdown(Math.max(0, 3 - left / 1000)); // arrivé en cours de route : on rejoint le compte
 		}
 	});
 	// Ouverture : on file sur la quête (le lot 4 le fera aussi par le flux temps réel).
