@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import SoundToggle from '$lib/components/SoundToggle.svelte';
 	let { children } = $props();
 	const nav = [
 		{ href: '/admin', label: 'Calendrier' },
@@ -17,7 +18,8 @@
 	<header class="row">
 		<span class="title-on-bg brand">L'atelier du Père Noël</span>
 		<span class="sticker tilt">ADMIN</span>
-		<a class="btn secondary small" href="/" style="margin-left: auto">Voir le site joueur →</a>
+		<span style="margin-left: auto"><SoundToggle /></span>
+		<a class="btn secondary small" href="/">Voir le site joueur →</a>
 	</header>
 
 	<div class="layout">

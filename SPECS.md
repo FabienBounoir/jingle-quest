@@ -307,7 +307,7 @@ Ponytail : une boucle à 1 s plutôt qu'un `setTimeout` calé sur l'heure d'ouve
 | `presence` | `{ waiting, online }`, en utilisateurs distincts | au plus 1/s si ça change |
 | `answered` | `{ count }` pour la question du jour | au plus 1/s |
 | `leaderboard` | `{ top: 20 premiers, me: { rank, points } }` | au plus 1/s |
-| `open` | `{ date }` | à l'heure d'ouverture : le client recharge la page |
+| `opening` | `{ date }` | à l'heure d'ouverture : le client recharge la page (pas `open`, nom réservé par EventSource) |
 
 - Le top 20 est sérialisé une seule fois, et on y ajoute la ligne `me` de chaque client.
 - On ouvre **une seule connexion SSE par onglet**, dans le layout, pas dans chaque composant.

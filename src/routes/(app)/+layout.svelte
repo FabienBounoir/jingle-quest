@@ -2,6 +2,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { connectLive, live, type View } from '$lib/live.svelte';
+	import SoundToggle from '$lib/components/SoundToggle.svelte';
 	import { ordinal } from '$lib/text';
 	let { data, children } = $props();
 
@@ -55,12 +56,15 @@
 		<a href="/classement" class="btn small {isCurrent('/classement') ? '' : 'secondary'}" aria-current={isCurrent('/classement') ? 'page' : undefined}>Classement</a>
 		{#if data.isAdmin}<a href="/admin" class="btn small secondary">Admin</a>{/if}
 	</nav>
+	<div class="right">
+	<SoundToggle />
 	<div class="me">
 		<span class="avatar" aria-hidden="true">{initials}</span>
 		<span class="who">
 			<strong>{data.user?.displayName}</strong>
 			<span>{me.points} pts{me.rank ? ` · ${me.rank}${ordinal(me.rank)}` : ''}</span>
 		</span>
+	</div>
 	</div>
 </header>
 
@@ -89,7 +93,8 @@
 	.name { font-family: var(--font-title); font-weight: 700; font-size: clamp(20px, 4.5vw, 30px); line-height: 1.05; }
 	.desk-nav { display: flex; gap: 10px; flex-wrap: wrap; }
 	.desk-nav .btn { border-radius: 999px; }
-	.me { margin-left: auto; display: flex; align-items: center; gap: 10px; padding: 5px 14px 5px 5px; border: 3px solid var(--ink); border-radius: 999px; background: var(--paper); box-shadow: 0 4px 0 var(--ink); }
+	.right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+	.me { display: flex; align-items: center; gap: 10px; padding: 5px 14px 5px 5px; border: 3px solid var(--ink); border-radius: 999px; background: var(--paper); box-shadow: 0 4px 0 var(--ink); }
 	.avatar { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--ink); background: var(--green-dark); color: var(--white); font: 600 15px var(--font-title); display: flex; align-items: center; justify-content: center; }
 	.who { display: flex; flex-direction: column; line-height: 1.15; font-size: 13px; }
 	.who strong { font-family: var(--font-title); font-weight: 600; font-size: 15px; }

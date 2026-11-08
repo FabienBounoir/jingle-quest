@@ -9,7 +9,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const s = await getSettings();
 	const now = new Date();
 	const [dayRows, mine] = await Promise.all([getDays(), userAnswers(locals.user!.id)]);
-	const next = dayRows.find((d) => d.opensAt > now);
+	// La prochaine à s'ouvrir, pas la prochaine par date (une case peut être décalée à une autre heure).
+	const next = dayRows.filter((d) => d.opensAt > now).sort((a, b) => a.opensAt.getTime() - b.opensAt.getTime())[0];
 	if (!next) redirect(303, '/'); // plus rien à attendre : l'accueil affiche la fin ou le dernier jour
 	const end = eventEnd(s.endDate, s.timezone);
 	const answered = new Set(mine.map((a) => a.questionId));

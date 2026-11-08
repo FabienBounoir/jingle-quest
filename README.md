@@ -40,6 +40,11 @@ Le `docker-compose` lance un faux fournisseur OIDC ([mock-oauth2-server](https:/
 | `npm run db:migrate` | Applique les migrations |
 | `npm run db:studio` | Explorateur de base |
 
+## Crédits
+
+- Son des boutons (`static/sounds/click.mp3`) : « cool bubble » par Roddz, flashkit.com (libre de droits).
+- Compte à rebours : son synthétisé dans le navigateur (`src/lib/sound.svelte.ts`), aucun fichier.
+
 ## Licences des polices
 
 Fredoka, Nunito et Gochi Hand sont sous licence SIL Open Font License 1.1, auto-hébergées dans `static/fonts/` (aucun appel à Google Fonts).

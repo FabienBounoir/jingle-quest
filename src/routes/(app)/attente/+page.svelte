@@ -4,6 +4,7 @@
 	import { dayLabel, dayShort } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
 	import PushButton from '$lib/components/PushButton.svelte';
+	import { playCountdown, sound, unlockSound } from '$lib/sound.svelte';
 	let { data } = $props();
 	// La présence me compte aussi : « attendent avec toi » = les autres.
 	const others = $derived(live.presence ? Math.max(0, live.presence.waiting - 1) : null);
@@ -13,6 +14,15 @@
 	const left = $derived(data.next.opensAt - clock.now);
 	const t = $derived(countdown(left));
 	const num = $derived(Number(data.next.date.slice(8)));
+	// 3 dernières secondes : gros 3-2-1 à l'écran et bips synchronisés (son synthétisé, cf. sound.svelte.ts).
+	const final = $derived(left > 0 && left <= 3000 ? Math.ceil(left / 1000) : null);
+	let counted = false;
+	$effect(() => {
+		if (!counted && left <= 3000 && left > -500) {
+			counted = true;
+			playCountdown(Math.max(0, 3 - left / 1000)); // arrivé en cours de route : on rejoint le compte
+		}
+	});
 	// Ouverture : on file sur la quête (le lot 4 le fera aussi par le flux temps réel).
 	let gone = false;
 	$effect(() => {
@@ -22,6 +32,12 @@
 		}
 	});
 </script>
+
+{#if final}
+	<div class="final" role="timer" aria-live="assertive">
+		{#key final}<span class="digit">{final}</span>{/key}
+	</div>
+{/if}
 
 <div class="wait">
 	<div class="gift bob" aria-hidden="true">
@@ -48,6 +64,10 @@
 		</p>
 	{/if}
 
+	{#if sound.enabled && !sound.unlocked}
+		<button type="button" class="btn secondary small" onclick={unlockSound}>Activer le son du compte à rebours</button>
+	{/if}
+
 	<p class="hint">Reste sur cette page : la quête s'affiche toute seule à l'ouverture. Les premiers décrochent le plus gros bonus !</p>
 
 	<PushButton vapidKey={data.pushKey} />
@@ -64,6 +84,9 @@
 </div>
 
 <style>
+	.final { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(42, 26, 31, 0.55); pointer-events: none; }
+	.digit { font: 700 clamp(160px, 40vw, 320px)/1 var(--font-title); color: var(--gold); -webkit-text-stroke: 6px var(--ink); paint-order: stroke fill; text-shadow: 10px 10px 0 var(--ink); animation: pop3 0.9s ease-out both; }
+	@keyframes pop3 { 0% { transform: scale(1.6) rotate(-8deg); opacity: 0; } 25% { transform: scale(1) rotate(3deg); opacity: 1; } 100% { transform: scale(0.85) rotate(0deg); opacity: 0.9; } }
 	.wait { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 26px; text-align: center; }
 	.when { margin: 0; color: var(--white); font-size: 24px; }
 	.when::first-letter { text-transform: uppercase; }

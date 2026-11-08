@@ -251,7 +251,7 @@ async function openDueDays(now: number) {
 			state.dirtyBoard = true;
 		}
 		state.dirtyAnswered = true;
-		broadcast(() => sse('open', { date: d.date }));
+		broadcast(() => sse('opening', { date: d.date })); // pas « open » : c'est déjà l'événement natif d'EventSource
 	}
 }
 

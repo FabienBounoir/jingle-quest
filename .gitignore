@@ -6,3 +6,7 @@ build/
 !.env.example
 .DS_Store
 *.export.json
+
+# Sons déposés à la racine pour essai : jamais versionnés. Seuls ceux de static/sounds/, dont la licence
+# est connue, sont dans le dépôt (cf. README, « Crédits »).
+/*.mp3

@@ -13,12 +13,12 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const [dayRows, mine, standings, players] = await Promise.all([getDays(), userAnswers(locals.user!.id), getStandings(), playerCount()]);
 	const byQuestion = new Map(mine.map((a) => [a.questionId, a]));
 
-	let nextMarked = false;
+	// « Prochaine » = la prochaine à s'ouvrir (pas forcément la suivante par date).
+	const nextDate = dayRows.filter((d) => d.opensAt > now).sort((a, b) => a.opensAt.getTime() - b.opensAt.getTime())[0]?.date;
 	const cells = dayRows.map((d) => {
 		const a = d.questionId ? (byQuestion.get(d.questionId) ?? null) : null;
 		const state = cellState({ date: d.date, opensAt: d.opensAt, hasQuestion: d.questionId !== null }, a, now, end, s.timezone);
-		const next = state === 'wrapped' && !nextMarked;
-		if (next) nextMarked = true;
+		const next = d.date === nextDate;
 		return {
 			date: d.date,
 			num: Number(d.date.slice(8)),

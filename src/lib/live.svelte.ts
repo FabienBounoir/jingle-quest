@@ -30,6 +30,6 @@ export function connectLive(view: View): () => void {
 		live.me = d.me;
 		live.ranked = d.ranked;
 	});
-	on<{ date: string }>('open', (d) => (live.opened = { date: d.date, seq: live.opened.seq + 1 }));
+	on<{ date: string }>('opening', (d) => (live.opened = { date: d.date, seq: live.opened.seq + 1 }));
 	return () => es.close();
 }
