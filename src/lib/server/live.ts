@@ -1,6 +1,7 @@
 // Temps réel (SPECS §7.4) : tout l'état vit en mémoire de l'unique pod, reconstruit depuis Postgres
 // au démarrage. Une boucle d'une seconde ouvre les cases, et diffuse classement, compteurs et présence
 // au plus une fois par seconde, quel que soit le nombre de réponses reçues entre-temps.
+import { version } from '$app/environment';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { answers, days, db, users } from '$lib/server/db';
 import { rankBoard, type BoardEntry, type Ranked } from './game';
@@ -8,7 +9,7 @@ import { sendToAll } from './push';
 import { getSettings } from './settings';
 
 export type View = 'calendar' | 'question' | 'waiting' | 'board';
-type Client = { userId: string; view: View; send: (chunk: string) => boolean };
+type Client = { userId: string; name: string; view: View; send: (chunk: string) => boolean };
 
 /** Nombre d'entrées du classement envoyées selon la page (0 = seulement « moi »). */
 const TOP: Record<View, number> = { calendar: 5, board: 50, question: 0, waiting: 0 };
@@ -16,6 +17,7 @@ const HEARTBEAT_MS = 25_000; // sous le timeout de la Route OpenShift (SPECS §5
 const OPEN_BROADCAST_WINDOW_MS = 5 * 60_000; // au démarrage, une case ouverte il y a plus longtemps ne « s'ouvre » plus
 // ponytail: rappel push fixe à 5 min avant l'ouverture ; à passer dans les réglages admin si on veut le faire varier.
 const REMINDER_LEAD_MS = 5 * 60_000;
+const WAITERS_MAX = 40; // avatars envoyés à la salle d'attente ; au-delà, seul le compteur de présence suit
 
 type Schedule = { date: string; opensAt: number; questionId: number | null; notified: boolean; reminded: boolean }[];
 
@@ -29,6 +31,9 @@ const state = {
 	dirtyBoard: true,
 	dirtyAnswered: false,
 	lastPresence: '',
+	lastWaiters: '',
+	// ponytail: annonce en mémoire, perdue au redémarrage du pod ; en base si elle doit survivre à un déploiement.
+	announcement: null as { id: number; text: string } | null,
 	lastBeat: Date.now()
 };
 
@@ -101,8 +106,29 @@ export async function reloadLive() {
 
 /** À appeler quand l'admin modifie le calendrier (heures, exclusions, quêtes rattachées). */
 export function refreshSchedule() {
-	if (ready) loadSchedule().catch((e) => console.error('live_schedule_failed', e));
+	if (!ready) return;
+	const before = scheduleKey();
+	loadSchedule()
+		.then(() => {
+			// Heure décalée, case exclue, quête rattachée : la salle d'attente et le calendrier rechargent
+			// leurs données sans recharger la page (compte à rebours compris).
+			if (scheduleKey() === before) return;
+			const msg = sse('schedule', {});
+			broadcast((c) => (c.view === 'waiting' || c.view === 'calendar' ? msg : null));
+		})
+		.catch((e) => console.error('live_schedule_failed', e));
 }
+
+const scheduleKey = () => state.schedule.map((d) => `${d.date}@${d.opensAt}#${d.questionId}`).join();
+
+/** Annonce admin affichée en bannière chez tous les joueurs connectés (et ceux qui arrivent). Vide = retirer. */
+export function announce(text: string) {
+	state.announcement = text ? { id: Date.now(), text } : null;
+	const msg = sse('announce', state.announcement);
+	broadcast(() => msg);
+}
+
+export const getAnnouncement = () => state.announcement?.text ?? '';
 
 // ---------- Lecture (pages SSR) ----------
 
@@ -132,6 +158,13 @@ export function presence() {
 		if (c.view === 'waiting') waiting.add(c.userId);
 	}
 	return { online: online.size, waiting: waiting.size };
+}
+
+/** Qui attend dans la salle d'attente, par ordre d'arrivée (un joueur à deux onglets compte une fois). */
+function waiters() {
+	const seen = new Map<string, string>();
+	for (const c of state.clients) if (c.view === 'waiting' && !seen.has(c.userId)) seen.set(c.userId, c.name);
+	return [...seen].slice(-WAITERS_MAX).map(([id, name]) => ({ id, name }));
 }
 
 // ---------- Écriture ----------
@@ -177,12 +210,16 @@ function todayAnswered() {
 	return q === null ? null : { questionId: q, count: state.answered.get(q) ?? 0 };
 }
 
-export async function connect(userId: string, view: View, send: Client['send']): Promise<() => void> {
+export async function connect(userId: string, name: string, view: View, send: Client['send']): Promise<() => void> {
 	await ensureLive();
-	const client: Client = { userId, view, send };
+	const client: Client = { userId, name, view, send };
 	state.clients.add(client);
 	const ranked = ranking();
 	send(`retry: 3000\n\n`);
+	// Version du build : un onglet ouvert avant une mise en prod se recharge tout seul en se reconnectant.
+	send(sse('version', version));
+	if (state.announcement) send(sse('announce', state.announcement));
+	if (view === 'waiting') send(sse('waiters', waiters()));
 	send(sse('presence', presence()));
 	send(sse('answered', todayAnswered()));
 	send(leaderboardFor(client, ranked, topsFor(ranked)));
@@ -276,6 +313,13 @@ async function tick() {
 		state.lastPresence = key;
 		const msg = sse('presence', p);
 		broadcast(() => msg);
+	}
+	const w = waiters();
+	const wKey = w.map((x) => x.id).join();
+	if (wKey !== state.lastWaiters) {
+		state.lastWaiters = wKey;
+		const msg = sse('waiters', w);
+		broadcast((c) => (c.view === 'waiting' ? msg : null));
 	}
 	if (now - state.lastBeat >= HEARTBEAT_MS) {
 		state.lastBeat = now;

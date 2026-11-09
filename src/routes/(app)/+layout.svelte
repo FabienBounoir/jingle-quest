@@ -25,6 +25,14 @@
 		if (page.url.pathname.startsWith('/attente')) setTimeout(() => goto(`/jour/${date}`, { invalidateAll: true }), 800);
 		else invalidateAll();
 	});
+	// Calendrier modifié par l'admin (heure décalée…) : salle d'attente et calendrier se remettent à jour.
+	let seenSchedule = 0;
+	$effect(() => {
+		if (live.scheduleSeq === seenSchedule) return;
+		seenSchedule = live.scheduleSeq;
+		invalidateAll();
+	});
+	let dismissed = $state(0);
 	const me = $derived(live.me !== undefined ? (live.me ?? { points: 0, rank: null }) : data.me);
 	const initials = $derived(
 		(data.user?.displayName ?? '?')
@@ -71,6 +79,14 @@
 	</div>
 </header>
 
+{#if live.announce && live.announce.id !== dismissed}
+	<div class="announce" role="status" aria-live="polite">
+		<span class="megaphone" aria-hidden="true">📣</span>
+		<p>{live.announce.text}</p>
+		<button type="button" class="close" aria-label="Fermer l'annonce" onclick={() => (dismissed = live.announce!.id)}>✕</button>
+	</div>
+{/if}
+
 <div class="page">{@render children()}</div>
 
 <!-- Pas de barre d'onglets sur la quête : elle a son bouton retour, et la barre fixe recouvrirait le champ
@@ -104,6 +120,15 @@
 	.who strong { font-family: var(--font-title); font-weight: 600; font-size: 15px; }
 	.page { max-width: 1240px; margin: 0 auto; padding: 24px 24px 64px; }
 	.tabbar { display: none; }
+	.announce {
+		max-width: 1192px; margin: 18px auto 0; padding: 12px 14px 12px 18px; display: flex; align-items: center; gap: 12px;
+		border: 3.5px solid var(--ink); border-radius: 18px; background: var(--gold); box-shadow: 5px 5px 0 var(--ink);
+		transform: rotate(-0.6deg); animation: drop 0.35s ease-out;
+	}
+	.announce p { margin: 0; flex: 1; font: 600 17px/1.3 var(--font-title); white-space: pre-line; }
+	.megaphone { font-size: 24px; }
+	.close { flex: none; width: 36px; height: 36px; border: 3px solid var(--ink); border-radius: 50%; background: var(--paper); font: 700 15px var(--font-title); cursor: pointer; }
+	@keyframes drop { from { transform: translateY(-14px) rotate(-0.6deg); opacity: 0; } }
 
 	@media (max-width: 700px) {
 		.top { padding: 14px 14px 0; }
@@ -111,6 +136,7 @@
 		.desk-nav, .who { display: none; }
 		.me { padding: 0; border-radius: 50%; }
 		.page { padding: 18px 14px 120px; }
+		.announce { margin: 14px 14px 0; }
 		.tabbar {
 			position: fixed; left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom));
 			z-index: 10; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 6px;

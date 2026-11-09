@@ -10,6 +10,29 @@
 	// La présence me compte aussi : « attendent avec toi » = les autres.
 	const others = $derived(live.presence ? Math.max(0, live.presence.waiting - 1) : null);
 
+	// Arrivées en direct : avatars de ceux qui attendent, et une bulle « Nina arrive ! » pour chaque nouveau.
+	const COLORS = ['#1F8A55', '#C62F3B', '#2D4B9A', '#7A3FA0', '#D9822B', '#0F7C8C'];
+	const hue = (id: string) => COLORS[[...id].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) >>> 0, 0) % COLORS.length];
+	const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+	const firstName = (n: string) => n.split(/\s+/)[0];
+	const crowd = $derived((live.waiters ?? []).filter((w) => w.id !== data.user?.id).toReversed()); // dernier arrivé en premier
+	let arrivals = $state<{ key: number; name: string }[]>([]);
+	let known: Set<string> | null = null; // null = premier envoi : ceux déjà là ne « viennent » pas d'arriver
+	$effect(() => {
+		const list = live.waiters;
+		if (!list) return;
+		const ids = new Set(list.map((w) => w.id));
+		if (known) {
+			for (const w of list) {
+				if (known.has(w.id) || w.id === data.user?.id) continue;
+				const a = { key: Math.random(), name: firstName(w.name) };
+				arrivals = [...arrivals, a].slice(-3);
+				setTimeout(() => (arrivals = arrivals.filter((x) => x !== a)), 3500);
+			}
+		}
+		known = ids;
+	});
+
 	// svelte-ignore state_referenced_locally
 	const clock = serverClock(data.serverNow);
 	const left = $derived(data.next.opensAt - clock.now);
@@ -42,6 +65,10 @@
 
 {#if final !== null}<Countdown321 value={final} />{/if}
 
+<div class="arrivals" aria-live="polite">
+	{#each arrivals as a (a.key)}<p class="bubble hand">{a.name} arrive ! 🎄</p>{/each}
+</div>
+
 <div class="wait">
 	<div class="gift bob" aria-hidden="true">
 		<span class="box"></span><span class="lid"></span><span class="rib"></span><span class="bow l"></span><span class="bow r"></span>
@@ -65,6 +92,15 @@
 			<span class="dot"></span>
 			{#if others === 0}tu es le premier lutin dans la salle !{:else}<strong>{others}</strong> lutin{others > 1 ? 's attendent' : ' attend'} avec toi{/if}
 		</p>
+	{/if}
+
+	{#if crowd.length}
+		<ul class="crowd" aria-label="Lutins dans la salle d'attente">
+			{#each crowd.slice(0, 12) as w (w.id)}
+				<li class="av" style:background={hue(w.id)} title={w.name}>{initials(w.name)}</li>
+			{/each}
+			{#if crowd.length > 12}<li class="av more">+{crowd.length - 12}</li>{/if}
+		</ul>
 	{/if}
 
 	{#if sound.enabled && !sound.unlocked}
@@ -103,6 +139,13 @@
 	.waiting strong { font: 700 28px var(--font-title); font-variant-numeric: tabular-nums; }
 	.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--green-dark); animation: blink 1.2s infinite; }
 	@keyframes blink { 50% { opacity: 0.35; } }
+	.crowd { list-style: none; margin: -8px 0 0; padding: 0 0 0 12px; display: flex; flex-wrap: wrap; justify-content: center; }
+	.av { width: 46px; height: 46px; margin-left: -12px; border: 3px solid var(--ink); border-radius: 50%; color: var(--white); font: 600 15px var(--font-title); display: flex; align-items: center; justify-content: center; animation: pop 0.35s ease-out; }
+	.av.more { background: var(--paper); color: var(--ink); }
+	@keyframes pop { from { transform: scale(0); } 70% { transform: scale(1.15); } }
+	.arrivals { position: fixed; z-index: 20; left: 50%; top: 90px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
+	.bubble { margin: 0; padding: 8px 18px; border: 3px solid var(--ink); border-radius: 999px; background: var(--paper); box-shadow: 0 4px 0 var(--ink); font-size: 20px; white-space: nowrap; animation: arrive 3.5s ease-in-out forwards; }
+	@keyframes arrive { 0% { opacity: 0; transform: translateY(-12px) rotate(-2deg); } 10%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-8px); } }
 	.catch { border-style: dashed; background: var(--white); transform: rotate(1deg); text-align: left; display: flex; flex-direction: column; gap: 8px; }
 	.title { margin: 0; font: 700 20px var(--font-title); }
 	.catch .muted { margin: 0; }

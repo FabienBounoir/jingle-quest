@@ -1,3 +1,5 @@
+import { version } from '$app/environment';
+
 // Flux temps réel côté client : UNE connexion SSE par onglet (ouverte par le layout joueur), dont les
 // pages lisent l'état. Côté serveur ce module n'est jamais modifié (EventSource n'existe qu'au
 // navigateur), donc aucun état ne fuit d'un utilisateur à l'autre pendant le rendu SSR.
@@ -14,8 +16,16 @@ export const live = $state({
 	me: undefined as Me | undefined, // undefined = pas encore reçu, null = pas encore classé
 	ranked: 0,
 	/** Dernière case ouverte (date) et compteur, pour réagir à chaque ouverture. */
-	opened: { date: '', seq: 0 }
+	opened: { date: '', seq: 0 },
+	/** Calendrier modifié par l'admin : les pages concernées rechargent leurs données. */
+	scheduleSeq: 0,
+	/** Annonce admin en cours (null = aucune). */
+	announce: null as { id: number; text: string } | null,
+	/** Joueurs dans la salle d'attente, par ordre d'arrivée (reçu seulement sur cette page). */
+	waiters: null as { id: string; name: string }[] | null
 });
+
+const RELOAD_KEY = 'jq-reloaded-for';
 
 export function connectLive(view: View): () => void {
 	live.top = null; // la taille du top dépend de la page : on attend celui de la nouvelle connexion
@@ -31,5 +41,15 @@ export function connectLive(view: View): () => void {
 		live.ranked = d.ranked;
 	});
 	on<{ date: string }>('opening', (d) => (live.opened = { date: d.date, seq: live.opened.seq + 1 }));
+	on('schedule', () => live.scheduleSeq++);
+	on<typeof live.announce>('announce', (d) => (live.announce = d));
+	on<typeof live.waiters>('waiters', (d) => (live.waiters = d));
+	on<string>('version', (v) => {
+		// Nouvelle mise en prod : on recharge pour prendre le nouveau code. Une seule fois par version, au
+		// cas où l'ancien pod répondrait encore pendant le déploiement (pas de boucle de rechargements).
+		if (v === version || sessionStorage.getItem(RELOAD_KEY) === v) return;
+		sessionStorage.setItem(RELOAD_KEY, v);
+		location.reload();
+	});
 	return () => es.close();
 }

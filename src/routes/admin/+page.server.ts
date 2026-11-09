@@ -1,7 +1,8 @@
 import { asc, eq } from 'drizzle-orm';
 import type { Actions, PageServerLoad } from './$types';
 import { days, db, questions } from '$lib/server/db';
-import { BadInput, guard, hhmm, isoDate } from '$lib/server/form';
+import { BadInput, guard, hhmm, isoDate, str } from '$lib/server/form';
+import { announce, getAnnouncement } from '$lib/server/live';
 import { getSettings } from '$lib/server/settings';
 import { localParts, zonedTime } from '$lib/server/tz';
 
@@ -15,6 +16,7 @@ export const load: PageServerLoad = async () => {
 	const now = Date.now();
 	return {
 		timezone: s.timezone,
+		announcement: getAnnouncement(),
 		days: rows.map((r) => ({
 			date: r.date,
 			time: localParts(r.opensAt, s.timezone).time,
@@ -27,6 +29,13 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
+	announce: async ({ request }) =>
+		guard(async () => {
+			const fd = await request.formData();
+			const text = fd.get('clear') ? '' : str(fd, 'text', { max: 280, label: 'Annonce' });
+			announce(text);
+			return { ok: text ? 'Annonce envoyée à tous les joueurs connectés.' : 'Annonce retirée.' };
+		}),
 	day: async ({ request }) =>
 		guard(async () => {
 			const fd = await request.formData();

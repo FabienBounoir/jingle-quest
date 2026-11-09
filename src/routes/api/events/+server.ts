@@ -35,7 +35,7 @@ export const GET: RequestHandler = async ({ locals, url, request }) => {
 				controller.enqueue(enc.encode(chunk));
 				return true;
 			};
-			disconnect = await connect(locals.user!.id, view, send);
+			disconnect = await connect(locals.user!.id, locals.user!.displayName, view, send);
 			request.signal.addEventListener('abort', close);
 		},
 		cancel() {

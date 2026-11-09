@@ -10,6 +10,18 @@
 <h1 class="title-on-bg">Calendrier</h1>
 <Notice {form} />
 
+<section class="card stack">
+	<h2>Annonce en direct</h2>
+	<p class="muted">S'affiche tout de suite en bannière chez tous les joueurs connectés, et chez ceux qui arrivent ensuite.</p>
+	<form method="POST" action="?/announce" use:enhance={() => ({ update }) => update({ reset: false })} class="stack">
+		<textarea name="text" rows="2" maxlength="280" placeholder="Petit souci technique, ouverture à 9h05 !" aria-label="Texte de l'annonce">{data.announcement}</textarea>
+		<div class="row">
+			<button class="btn" type="submit">Envoyer</button>
+			{#if data.announcement}<button class="btn secondary" type="submit" name="clear" value="1" formnovalidate>Retirer</button>{/if}
+		</div>
+	</form>
+</section>
+
 {#if data.days.length === 0}
 	<section class="card stack">
 		<p>Pas encore de cases. Règle les dates puis génère le calendrier.</p>
