@@ -26,6 +26,10 @@ function getDiscovery(): Promise<Discovery> {
 	return discovery;
 }
 
+// Entra seulement : User.Read permet de lire SA propre photo (/me/photo) au login. Ne jamais demander
+// User.ReadBasic.All, qui ouvrirait l'annuaire. Les autres IdP rejetteraient ce scope inconnu.
+export const isEntra = () => new URL(config.oidcIssuerUrl).hostname === 'login.microsoftonline.com';
+
 export const redirectUri = () => `${config.publicBaseUrl}/auth/callback`;
 
 const b64url = (buf: Buffer) => buf.toString('base64url');
@@ -41,7 +45,7 @@ export async function buildAuthorizationUrl(next: string): Promise<{ url: string
 		response_type: 'code',
 		client_id: config.oidcClientId,
 		redirect_uri: redirectUri(),
-		scope: 'openid profile email',
+		scope: isEntra() ? 'openid profile email User.Read' : 'openid profile email',
 		state: pending.state,
 		nonce: pending.nonce,
 		code_challenge: b64url(createHash('sha256').update(pending.verifier).digest()),
@@ -95,8 +99,11 @@ export function identityFromIdToken(
 	return { email: normalized, name };
 }
 
-/** Échange le code contre un id_token et renvoie l'identité authentifiée, ou null. */
-export async function exchangeCode(code: string, pending: OidcPending): Promise<Identity | null> {
+/**
+ * Échange le code contre un id_token et renvoie l'identité authentifiée, ou null. L'access token n'est
+ * renvoyé que pour lire la photo dans la foulée : il n'est jamais stocké.
+ */
+export async function exchangeCode(code: string, pending: OidcPending): Promise<(Identity & { accessToken?: string }) | null> {
 	const d = await getDiscovery();
 	const res = await fetch(d.token_endpoint, {
 		method: 'POST',
@@ -111,9 +118,10 @@ export async function exchangeCode(code: string, pending: OidcPending): Promise<
 		})
 	});
 	if (!res.ok) throw new Error(`OIDC token HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
-	const { id_token } = (await res.json()) as { id_token?: string };
+	const { id_token, access_token } = (await res.json()) as { id_token?: string; access_token?: string };
 	if (!id_token) return null;
-	return identityFromIdToken(id_token, { issuer: d.issuer, clientId: config.oidcClientId, nonce: pending.nonce });
+	const identity = identityFromIdToken(id_token, { issuer: d.issuer, clientId: config.oidcClientId, nonce: pending.nonce });
+	return identity && { ...identity, accessToken: access_token };
 }
 
 const isUpper = (w: string) => /\p{Lu}/u.test(w) && w === w.toLocaleUpperCase('fr');

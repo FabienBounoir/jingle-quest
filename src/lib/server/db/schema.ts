@@ -28,6 +28,10 @@ export const users = pgTable('users', {
 	id: uuid('id').primaryKey().defaultRandom(),
 	email: text('email').notNull().unique(),
 	displayName: text('display_name').notNull(),
+	// Photo Entra (96px webp réencodée, ~4 Ko), relue à chaque connexion. Jamais sélectionnée hors de /img/avatar.
+	avatar: bytea('avatar'),
+	// Le joueur a masqué sa photo : on l'efface et on ne la relit plus au login.
+	avatarHidden: boolean('avatar_hidden').notNull().default(false),
 	createdAt: tstz('created_at').notNull().defaultNow(),
 	lastLoginAt: tstz('last_login_at').notNull().defaultNow()
 });

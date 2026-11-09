@@ -25,6 +25,13 @@
 		{:else}
 			<p class="note">Les bonnes réponses s'afficheront ici à la fin de l'événement.</p>
 		{/if}
+		<form method="POST" action="?/photo" class="note">
+			{#if data.avatarHidden}
+				Ta photo est masquée. <input type="hidden" name="hide" value="0" /><button class="link">L'afficher</button> (elle reviendra à ta prochaine connexion)
+			{:else}
+				Ta photo de profil Microsoft est visible des autres joueurs. <input type="hidden" name="hide" value="1" /><button class="link">La masquer</button>
+			{/if}
+		</form>
 	</div>
 
 	{#if data.rows.length === 0}
@@ -66,6 +73,7 @@
 	h1 { font-size: clamp(34px, 7vw, 46px); }
 	.sub { margin: 0; color: var(--white); font-size: 22px; }
 	.note { margin: 0; color: var(--white); font-size: 14px; }
+	.link { padding: 0; border: 0; background: none; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }
 	.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
 	.item { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 22px; }
 	.item.ok { background: #e8f6ee; }

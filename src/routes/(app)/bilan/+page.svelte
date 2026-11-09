@@ -1,10 +1,10 @@
 <script lang="ts">
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { dayLabel } from '$lib/dates';
 	import { ordinal } from '$lib/text';
 	let { data } = $props();
 	const r = $derived(data.recap);
 	const COLORS = ['#1F8A55', '#2D4B9A', '#6B3FA0'];
-	const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase();
 	const first = (n: string) => n.split(/\s+/)[0];
 	const order = [1, 0, 2]; // podium : 2e, 1er, 3e
 	function duration(ms: number) {
@@ -50,7 +50,7 @@
 					{@const p = data.podium[i]}
 					<div class="step s{i + 1}">
 						{#if i === 0}<svg class="crown" aria-hidden="true" width="56" height="44" viewBox="0 0 56 44"><path d="M4 14l12 12 12-22 12 22 12-12-4 26H8z" fill="#FFC542" stroke="#2A1A1F" stroke-width="4" stroke-linejoin="round" /></svg>{/if}
-						<span class="av" style:background={COLORS[i]} aria-hidden="true">{initials(p.name)}</span>
+						<Avatar class="av" style="background: {COLORS[i]}" userId={p.userId} name={p.name} />
 						<span class="who" class:me={p.userId === data.userId}>{first(p.name)} · {p.points}</span>
 						<span class="block">{i + 1}</span>
 					</div>
@@ -95,8 +95,8 @@
 
 	.podium { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: end; }
 	.step { display: flex; flex-direction: column; align-items: center; gap: 8px; }
-	.av { width: 70px; height: 70px; border: 4px solid var(--ink); border-radius: 50%; color: var(--white); display: flex; align-items: center; justify-content: center; font: 700 22px var(--font-title); }
-	.s1 .av { width: 88px; height: 88px; font-size: 28px; }
+	.step :global(.av) { width: 70px; height: 70px; border: 4px solid var(--ink); border-radius: 50%; color: var(--white); display: flex; align-items: center; justify-content: center; font: 700 22px var(--font-title); }
+	.s1 :global(.av) { width: 88px; height: 88px; font-size: 28px; }
 	.who { max-width: 100%; padding: 3px 10px; border: 3px solid var(--ink); border-radius: 10px; background: var(--white); font: 600 15px var(--font-title); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 	.who.me { background: var(--gold); }
 	.block { width: 100%; border: 4px solid var(--ink); border-radius: 18px 18px 8px 8px; box-shadow: 6px 6px 0 var(--ink); display: flex; align-items: center; justify-content: center; font: 700 52px var(--font-title); }
@@ -130,8 +130,8 @@
 	}
 
 	@media (max-width: 500px) {
-		.av { width: 52px; height: 52px; font-size: 17px; border-width: 3px; }
-		.s1 .av { width: 64px; height: 64px; font-size: 21px; }
+		.step :global(.av) { width: 52px; height: 52px; font-size: 17px; border-width: 3px; }
+		.s1 :global(.av) { width: 64px; height: 64px; font-size: 21px; }
 		.who { font-size: 13px; }
 		.block { font-size: 36px; box-shadow: 4px 4px 0 var(--ink); }
 		.s1 .block { height: 120px; font-size: 48px; }

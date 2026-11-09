@@ -2,6 +2,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { connectLive, live, type View } from '$lib/live.svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import SoundToggle from '$lib/components/SoundToggle.svelte';
 	import { ordinal } from '$lib/text';
 	let { data, children } = $props();
@@ -34,14 +35,6 @@
 	});
 	let dismissed = $state(0);
 	const me = $derived(live.me !== undefined ? (live.me ?? { points: 0, rank: null }) : data.me);
-	const initials = $derived(
-		(data.user?.displayName ?? '?')
-			.split(/\s+/)
-			.map((w) => w[0])
-			.join('')
-			.slice(0, 2)
-			.toUpperCase()
-	);
 	const path = $derived(page.url.pathname);
 	const tabs = [
 		{ href: '/', label: 'Calendrier', icon: 'gift' },
@@ -70,7 +63,7 @@
 	<div class="right">
 	<SoundToggle />
 	<div class="me">
-		<span class="avatar" aria-hidden="true">{initials}</span>
+		<Avatar class="avatar" userId={data.user!.id} name={data.user!.displayName} />
 		<span class="who">
 			<strong>{data.user?.displayName}</strong>
 			<span>{me.points} pts{me.rank ? ` · ${me.rank}${ordinal(me.rank)}` : ''}</span>
@@ -115,7 +108,7 @@
 	.desk-nav .btn { border-radius: 999px; }
 	.right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
 	.me { display: flex; align-items: center; gap: 10px; padding: 5px 14px 5px 5px; border: 3px solid var(--ink); border-radius: 999px; background: var(--paper); box-shadow: 0 4px 0 var(--ink); }
-	.avatar { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--ink); background: var(--green-dark); color: var(--white); font: 600 15px var(--font-title); display: flex; align-items: center; justify-content: center; }
+	.me :global(.avatar) { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--ink); background: var(--green-dark); color: var(--white); font: 600 15px var(--font-title); display: flex; align-items: center; justify-content: center; }
 	.who { display: flex; flex-direction: column; line-height: 1.15; font-size: 13px; }
 	.who strong { font-family: var(--font-title); font-weight: 600; font-size: 15px; }
 	.page { max-width: 1240px; margin: 0 auto; padding: 24px 24px 64px; }
