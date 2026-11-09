@@ -1,4 +1,4 @@
-// Partagé client/serveur : niveaux de la photo floue. Le joueur défloute lui-même ; chaque niveau
+// Partagé client/serveur : niveaux de la photo floue (et du zoom mystère, qui suit le même barème). Le joueur défloute lui-même ; chaque niveau
 // affine la mosaïque et réduit la part des points qu'une bonne réponse peut rapporter (bonus compris).
 // Premiers clics bon marché, puis de plus en plus chers ; la photo ne devient nette qu'au dernier.
 export const BLUR_LEVELS = [
@@ -19,3 +19,9 @@ export const BLUR_LEVELS = [
 export const BLUR_MULTIPLIERS: readonly number[] = BLUR_LEVELS.map((l) => l.points);
 export const BLUR_STAGES = BLUR_LEVELS.length;
 export const LAST_STAGE = BLUR_STAGES - 1;
+
+/**
+ * Zoom mystère : part de l'image visible à chaque niveau (autour du point choisi par l'admin). Même
+ * nombre de niveaux et mêmes points que la photo floue ; l'image entière n'apparaît qu'au dernier.
+ */
+export const ZOOM_CROPS = [0.06, 0.08, 0.1, 0.13, 0.17, 0.22, 0.3, 0.4, 0.55, 0.75, 1] as const;

@@ -70,11 +70,16 @@ export const listItems = pgTable(
 /**
  * list (autocomplétion dans une liste), choice (QCM), number (estimation), order (remettre dans l'ordre),
  * zone (clic sur l'image), match (associer deux colonnes), blur (photo floue que le joueur défloute,
- * chaque niveau lui coûtant des points ; réponse dans une liste).
+ * chaque niveau lui coûtant des points ; réponse dans une liste), zoom (zoom mystère : même principe en
+ * dézoomant), pin (viser un point de l'image, points selon la distance), word (mot mystère façon Wordle).
  */
-export const QUESTION_TYPES = ['list', 'choice', 'number', 'order', 'zone', 'match', 'blur'] as const;
+export const QUESTION_TYPES = ['list', 'choice', 'number', 'order', 'zone', 'match', 'blur', 'zoom', 'pin', 'word'] as const;
 /** Types dont la réponse se choisit dans une liste (bonnes réponses dans question_answers). */
-export const LIST_TYPES: readonly QuestionType[] = ['list', 'blur'];
+export const LIST_TYPES: readonly QuestionType[] = ['list', 'blur', 'zoom'];
+/** Types dont l'image se dévoile par niveaux, chacun coûtant des points (niveau dans `reveals`). */
+export const STAGED_TYPES: readonly QuestionType[] = ['blur', 'zoom'];
+/** Types qui n'ont pas de sens sans image. */
+export const IMAGE_TYPES: readonly QuestionType[] = ['zone', 'blur', 'zoom', 'pin'];
 export type QuestionType = (typeof QUESTION_TYPES)[number];
 
 export const questions = pgTable(
@@ -89,10 +94,10 @@ export const questions = pgTable(
 		imageMime: text('image_mime'),
 		/** Ce que voit le joueur (propositions du QCM, éléments mélangés, unité…). Cf. questionTypes.ts. */
 		config: jsonb('config').notNull().default({}),
-		/** La solution des types hors « list ». Ne quitte JAMAIS le serveur avant la fin de l'événement. */
+		/** La solution des types hors « list » (zoom : le point de départ). Ne quitte JAMAIS le serveur avant la fin de l'événement. */
 		solution: jsonb('solution').notNull().default({})
 	},
-	(t) => [check('questions_type', sql`${t.type} in ('list', 'choice', 'number', 'order', 'zone', 'match', 'blur')`)]
+	(t) => [check('questions_type', sql`${t.type} in ('list', 'choice', 'number', 'order', 'zone', 'match', 'blur', 'zoom', 'pin', 'word')`)]
 );
 
 /** Bonnes réponses d'une question (une ou plusieurs valeurs de sa liste). */
@@ -147,8 +152,9 @@ export const answers = pgTable(
 );
 
 /**
- * Photo qui se dévoile : niveau de défloutage atteint par chaque joueur (0 = le plus flou). Stocké en
- * base et pas dans le navigateur : recharger la page ou changer d'onglet ne fait pas regagner de points.
+ * Progression d'un joueur sur une question, stockée en base et pas dans le navigateur : recharger la page
+ * ou changer d'onglet ne fait pas regagner de points. Photo floue et zoom : niveau atteint (0 = le plus
+ * caché). Mot mystère : les essais déjà joués.
  */
 export const reveals = pgTable(
 	'reveals',
@@ -159,7 +165,8 @@ export const reveals = pgTable(
 		questionId: integer('question_id')
 			.notNull()
 			.references(() => questions.id, { onDelete: 'cascade' }),
-		stage: integer('stage').notNull()
+		stage: integer('stage').notNull(),
+		guesses: jsonb('guesses').$type<string[]>().notNull().default([])
 	},
 	(t) => [primaryKey({ columns: [t.userId, t.questionId] })]
 );

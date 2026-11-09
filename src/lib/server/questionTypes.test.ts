@@ -103,7 +103,7 @@ describe('Associer', () => {
 		const c = q.config as MatchConfig;
 		const sol = q.solution as MatchSolution;
 		expect(c.left).toEqual(['Julien', 'Inès', 'Hugo']);
-		expect(c.right).not.toEqual(['Lyon', 'Nantes', 'Lille']);
+		expect([...c.right].sort()).toEqual(['Lille', 'Lyon', 'Nantes']); // mélangée (l'ordre d'origine peut sortir, cf. shuffledOrder)
 		expect(sol.pairs.map((j, i) => `${c.left[i]}=${c.right[j]}`)).toEqual(['Julien=Lyon', 'Inès=Nantes', 'Hugo=Lille']);
 		const perfect = sol.pairs.map(String).map((v) => ['pair', v] as [string, string]);
 		expect(scoreAnswer('match', c, sol, form(perfect)).score).toBe(1);
@@ -121,5 +121,39 @@ describe('Associer', () => {
 	});
 	it('reconnaît une association inchangée malgré un autre mélange', () => {
 		expect(sameShuffledQuestion('match', parseAdmin('match', form(rows)), parseAdmin('match', form(rows)))).toBe(true);
+	});
+});
+
+describe('Viser juste', () => {
+	it('donne des points selon la distance, en vraies proportions', () => {
+		const q = parseAdmin('pin', form([['px', '0.5'], ['py', '0.5'], ['ratio', '0.5']])); // image 2:1
+		const at = (x: string, y: string) => scoreAnswer('pin', q.config, q.solution, form([['x', x], ['y', y]]));
+		expect(at('0.5', '0.5')).toMatchObject({ score: 1, correct: true });
+		expect(at('0.55', '0.5').score).toBe(0.7); // 5 % de la largeur
+		expect(at('0.5', '0.6').score).toBe(0.7); // 10 % de la hauteur = 5 % du grand côté
+		expect(at('0.6', '0.5')).toMatchObject({ score: 0.4, correct: false });
+		expect(at('0.9', '0.9').score).toBe(0);
+		expect(() => at('', '0.5')).toThrow(BadAnswer);
+		expect(() => parseAdmin('pin', form([['px', '0.5'], ['py', '0.5']]))).toThrow(/proportions/);
+		expect(() => parseAdmin('pin', form([['ratio', '1']]))).toThrow(/placer le point/);
+	});
+});
+
+describe('Mot mystère', () => {
+	const q = parseAdmin('word', form([['word', ' Atlàs ']]));
+	const play = (...g: string[]) => scoreAnswer('word', q.config, q.solution, form(g.map((x) => ['guess', x] as [string, string])));
+	it('normalise le mot et ne donne que sa longueur au joueur', () => {
+		expect(q).toEqual({ config: { length: 5 }, solution: { word: 'ATLAS' } });
+		expect(() => parseAdmin('word', form([['word', 'Sopra Steria']]))).toThrow(/un seul mot/);
+		expect(() => parseAdmin('word', form([['word', 'cœur']]))).toThrow(/un seul mot/);
+		expect(() => parseAdmin('word', form([['word', 'ab']]))).toThrow(/entre 3 et 12/);
+	});
+	it('note selon l’essai qui trouve, refuse une partie pas finie', () => {
+		expect(play('atlas')).toMatchObject({ score: 1, correct: true });
+		expect(play('LASSO', 'ATLAS')).toMatchObject({ score: 0.9, correct: true, value: { guesses: ['LASSO', 'ATLAS'] } });
+		expect(() => play('LASSO')).toThrow(/pas encore trouvé/);
+		expect(play('AAAAA', 'BBBBB', 'CCCCC', 'DDDDD', 'EEEEE', 'FFFFF').score).toBe(0);
+		expect(() => play('ATLA')).toThrow(BadAnswer);
+		expect(solutionText('word', q.config, q.solution)).toBe('ATLAS');
 	});
 });

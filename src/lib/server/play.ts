@@ -4,8 +4,9 @@ import { answerLists, answers, days, db, listItems, questionAnswers, questions, 
 import { BLUR_MULTIPLIERS, LAST_STAGE } from '$lib/blur';
 import { cellState, endOf, isSameDay, points, recap, type CellState } from './game';
 import { inArray } from 'drizzle-orm';
-import { BadAnswer, answerText, scoreAnswer, solutionText, type TypedQuestion, type ZoneSolution } from './questionTypes';
-import { LIST_TYPES, type QuestionType } from './db/schema';
+import { BadAnswer, answerText, scoreAnswer, solutionText, type PinSolution, type Point, type TypedQuestion, type WordSolution, type ZoneSolution } from './questionTypes';
+import { LIST_TYPES, STAGED_TYPES, type QuestionType } from './db/schema';
+import { WORD_TRIES, normalizeWord, wordMarks } from '$lib/word';
 import { getAnswered, getRanking, onAnswer } from './live';
 import { getSettings } from './settings';
 
@@ -133,19 +134,23 @@ export async function myAnswerText(q: QuestionPayload, a: { itemId: number | nul
 }
 
 /**
- * La solution, à n'appeler qu'une fois l'événement terminé : texte, et rectangle pour une zone.
+ * La solution, à n'appeler qu'une fois l'événement terminé : texte, rectangle d'une zone ou cible.
  */
-export async function reveal(questionId: number): Promise<{ text: string | null; zone: ZoneSolution | null }> {
+export async function reveal(questionId: number): Promise<{ text: string | null; zone: ZoneSolution | null; pin: Point | null }> {
 	const q = await loadQuestion(questionId);
-	if (q.type === 'zone') return { text: null, zone: q.secret as ZoneSolution };
-	if (!LIST_TYPES.includes(q.type)) return { text: solutionText(q.type as TypedQuestion, q.config, q.secret), zone: null };
+	if (q.type === 'zone') return { text: null, zone: q.secret as ZoneSolution, pin: null };
+	if (q.type === 'pin') {
+		const { x, y } = q.secret as PinSolution;
+		return { text: null, zone: null, pin: { x, y } };
+	}
+	if (!LIST_TYPES.includes(q.type)) return { text: solutionText(q.type as TypedQuestion, q.config, q.secret), zone: null, pin: null };
 	const rows = await db
 		.select({ label: listItems.label })
 		.from(questionAnswers)
 		.innerJoin(listItems, eq(listItems.id, questionAnswers.itemId))
 		.where(eq(questionAnswers.questionId, questionId))
 		.orderBy(asc(listItems.label));
-	return { text: rows.map((r) => r.label).join(' · '), zone: null };
+	return { text: rows.map((r) => r.label).join(' · '), zone: null, pin: null };
 }
 
 // ---------- Historique et bilan ----------
@@ -201,9 +206,9 @@ export async function history(userId: string) {
 	return { rows, ended, recap: recap(opened.map((d) => d.date), recapAnswers) };
 }
 
-// ---------- Photo qui se dévoile ----------
+// ---------- Photo qui se dévoile, zoom mystère ----------
 
-/** Niveau de défloutage atteint par ce joueur sur cette question (0 = le plus flou). */
+/** Niveau de dévoilement atteint par ce joueur sur cette question (0 = le plus caché). */
 export async function revealStage(userId: string, questionId: number): Promise<number> {
 	const [r] = await db
 		.select({ stage: reveals.stage })
@@ -225,7 +230,7 @@ export async function unblur(userId: string, date: string): Promise<UnblurResult
 	if (!day?.questionId) return { ok: false, status: 404, error: 'Pas de quête ce jour-là.' };
 	if (day.opensAt > now || now >= endOf(s)) return { ok: false, status: 403, error: 'Cette case n’est pas jouable.' };
 	const q = await loadQuestion(day.questionId);
-	if (q.type !== 'blur') return { ok: false, status: 400, error: 'Pas de photo à déflouter ici.' };
+	if (!STAGED_TYPES.includes(q.type)) return { ok: false, status: 400, error: 'Pas de photo à dévoiler ici.' };
 	const [done] = await db
 		.select({ n: count() })
 		.from(answers)
@@ -237,6 +242,70 @@ export async function unblur(userId: string, date: string): Promise<UnblurResult
 		.onConflictDoUpdate({ target: [reveals.userId, reveals.questionId], set: { stage: sql`least(${reveals.stage} + 1, ${LAST_STAGE})` } })
 		.returning({ stage: reveals.stage });
 	return { ok: true, stage: r.stage };
+}
+
+// ---------- Mot mystère ----------
+
+export type WordGuess = { guess: string; marks: number[] };
+
+const withMarks = (guesses: string[], word: string): WordGuess[] => guesses.map((guess) => ({ guess, marks: wordMarks(guess, word) }));
+
+/** Essais déjà joués par ce joueur, avec leurs indices. */
+export async function wordGuesses(userId: string, questionId: number): Promise<WordGuess[]> {
+	const q = await loadQuestion(questionId);
+	return withMarks(await storedGuesses(userId, questionId), (q.secret as WordSolution).word);
+}
+
+export type GuessResult = { ok: true; guesses: WordGuess[]; answer: AnswerResult | null } | { ok: false; status: 400 | 403 | 404 | 409; error: string };
+
+/**
+ * Un essai au mot mystère. Enregistré (atomiquement, 6 au plus) puis, si le mot est trouvé ou les essais
+ * épuisés, la réponse est enregistrée comme les autres types. Aperçu admin (`dryRun`) : rien n'est écrit,
+ * les essais précédents viennent du formulaire.
+ */
+export async function guessWord(user: { id: string; displayName: string }, date: string, fd: FormData, opts: { dryRun: boolean }): Promise<GuessResult> {
+	const s = await getSettings();
+	const now = new Date();
+	const day = await getDay(date);
+	if (!day?.questionId) return { ok: false, status: 404, error: 'Pas de quête ce jour-là.' };
+	if ((!opts.dryRun && day.opensAt > now) || now >= endOf(s)) return { ok: false, status: 403, error: 'Cette case n’est pas jouable.' };
+	const q = await loadQuestion(day.questionId);
+	if (q.type !== 'word') return { ok: false, status: 400, error: 'Pas de mot mystère ici.' };
+	const word = (q.secret as WordSolution).word;
+	const guess = normalizeWord(String(fd.get('guess') ?? ''));
+	if (guess.length !== word.length) return { ok: false, status: 400, error: `Le mot fait ${word.length} lettres.` };
+
+	let guesses: string[];
+	if (opts.dryRun) {
+		guesses = [...fd.getAll('previous').map((g) => normalizeWord(String(g))), guess].slice(0, WORD_TRIES);
+	} else {
+		const [done] = await db
+			.select({ n: count() })
+			.from(answers)
+			.where(and(eq(answers.userId, user.id), eq(answers.questionId, q.id)));
+		if (done.n > 0) return { ok: false, status: 409, error: 'Tu as déjà répondu.' };
+		// Un seul UPDATE conditionnel : deux essais simultanés ne dépassent jamais la limite.
+		const [r] = await db
+			.insert(reveals)
+			.values({ userId: user.id, questionId: q.id, stage: 0, guesses: [guess] })
+			.onConflictDoUpdate({
+				target: [reveals.userId, reveals.questionId],
+				set: { guesses: sql`${reveals.guesses} || ${JSON.stringify([guess])}::jsonb` },
+				setWhere: sql`jsonb_array_length(${reveals.guesses}) < ${WORD_TRIES} and not ${reveals.guesses} ? ${word}`
+			})
+			.returning({ guesses: reveals.guesses });
+		if (!r) return { ok: false, status: 409, error: 'Plus d’essai possible.' };
+		guesses = r.guesses;
+	}
+	const finished = guesses.includes(word) || guesses.length >= WORD_TRIES;
+	const answer = finished ? await submitAnswer(user, date, wordForm(guesses), opts) : null;
+	return { ok: true, guesses: withMarks(guesses, word), answer };
+}
+
+function wordForm(guesses: string[]) {
+	const fd = new FormData();
+	for (const g of guesses) fd.append('guess', g);
+	return fd;
 }
 
 // ---------- Soumission ----------
@@ -276,8 +345,8 @@ export async function submitAnswer(
 			.where(and(eq(questionAnswers.questionId, q.id), eq(questionAnswers.itemId, itemId)));
 		correct = n > 0;
 		score = correct ? 1 : 0;
-		if (q.type === 'blur') {
-			// Photo défloutée : une bonne réponse rapporte moins. Niveau lu en base (jamais celui du client),
+		if (STAGED_TYPES.includes(q.type)) {
+			// Photo défloutée ou dézoomée : une bonne réponse rapporte moins. Niveau lu en base (jamais celui du client),
 			// sauf en aperçu admin où rien n'est enregistré et où la page envoie le niveau affiché.
 			const stage = opts.dryRun ? Math.min(LAST_STAGE, Math.max(0, Number(fd.get('stage')) || 0)) : await revealStage(user.id, q.id);
 			score = correct ? BLUR_MULTIPLIERS[stage] : 0;
@@ -285,8 +354,11 @@ export async function submitAnswer(
 		}
 	} else {
 		try {
-			({ score, value } = scoreAnswer(q.type as TypedQuestion, q.config, q.secret, fd));
-			correct = score >= 1;
+			// Mot mystère : les essais sont lus en base, jamais dans le formulaire (sauf aperçu admin).
+			const form = q.type === 'word' && !opts.dryRun ? wordForm(await storedGuesses(user.id, q.id)) : fd;
+			const r = scoreAnswer(q.type as TypedQuestion, q.config, q.secret, form);
+			({ score, value } = r);
+			correct = r.correct ?? score >= 1;
 		} catch (e) {
 			if (e instanceof BadAnswer) return { ok: false, status: 400, error: e.message };
 			throw e;
@@ -307,6 +379,14 @@ export async function submitAnswer(
 	if (inserted.length === 0) return { ok: false, status: 409, error: 'Tu as déjà répondu à cette quête.' };
 	onAnswer({ userId: user.id, name: user.displayName, questionId: q.id, points: pts, correct, elapsedMs });
 	return { ok: true, score, correct, points: pts, dryRun: false };
+}
+
+async function storedGuesses(userId: string, questionId: number): Promise<string[]> {
+	const [r] = await db
+		.select({ guesses: reveals.guesses })
+		.from(reveals)
+		.where(and(eq(reveals.userId, userId), eq(reveals.questionId, questionId)));
+	return r?.guesses ?? [];
 }
 
 // ---------- Classement ----------

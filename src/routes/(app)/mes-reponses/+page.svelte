@@ -11,7 +11,7 @@
 		wrapped: { label: '', cls: '' },
 		empty: { label: '', cls: '' }
 	} as const;
-	const TYPES: Record<string, string> = { list: 'Liste', choice: 'QCM', number: 'Estimation', order: 'Ordre', zone: 'Zone', match: 'Associer', blur: 'Photo floue' };
+	const TYPES: Record<string, string> = { list: 'Liste', choice: 'QCM', number: 'Estimation', order: 'Ordre', zone: 'Zone', match: 'Associer', blur: 'Photo floue', zoom: 'Zoom mystère', pin: 'Viser juste', word: 'Mot mystère' };
 </script>
 
 <div class="page">

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { dayShort } from '$lib/dates';
-	const TYPE_LABELS: Record<string, string> = { choice: 'QCM', number: 'Estimation', order: 'Ordre', zone: 'Zone', match: 'Associer', blur: 'Photo floue' };
+	const TYPE_LABELS: Record<string, string> = { choice: 'QCM', number: 'Estimation', order: 'Ordre', zone: 'Zone', match: 'Associer', blur: 'Photo floue', zoom: 'Zoom mystère', pin: 'Viser juste', word: 'Mot mystère' };
 	let { data } = $props();
 </script>
 
@@ -18,8 +18,8 @@
 				<li>
 					{#if q.day}<span class="pill gold">{dayShort(q.day)}</span>{:else}<span class="pill grey">sans jour</span>{/if}
 					<a href="/admin/questions/{q.id}" class="text">{q.text}</a>
-					{#if q.type === 'list' || q.type === 'blur'}
-						{#if q.type === 'blur'}<span class="pill green">Photo floue</span>{/if}
+					{#if q.type === 'list' || q.type === 'blur' || q.type === 'zoom'}
+						{#if q.type !== 'list'}<span class="pill green">{TYPE_LABELS[q.type]}</span>{/if}
 						<span class="pill">{q.list}</span>
 						<span class="pill {q.correct ? 'green' : ''}">{q.correct} bonne{q.correct > 1 ? 's' : ''} réponse{q.correct > 1 ? 's' : ''}</span>
 					{:else}

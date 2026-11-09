@@ -6,6 +6,7 @@
 //   - score : réponse du joueur → part des points (0 à 1)
 import { randomInt } from 'node:crypto';
 import { fold } from '$lib/text';
+import { WORD_MAX, WORD_MIN, WORD_POINTS, WORD_TRIES, normalizeWord } from '$lib/word';
 import type { QuestionType } from './db/schema';
 
 export class BadAnswer extends Error {}
@@ -24,9 +25,15 @@ export type ZoneSolution = { x: number; y: number; w: number; h: number };
 export type MatchConfig = { left: string[]; right: string[] };
 /** pairs[i] = indice dans `right` qui va avec left[i]. */
 export type MatchSolution = { pairs: number[] };
+/** Point en fractions de l'image (zoom : point de départ ; viser juste : la cible). */
+export type Point = { x: number; y: number };
+/** `ratio` = hauteur / largeur de l'image, pour mesurer les distances en vraies proportions. */
+export type PinSolution = Point & { ratio: number };
+export type WordConfig = { length: number };
+export type WordSolution = { word: string };
 
-/** Types avec config + solution propres (la liste et la photo floue passent par question_answers). */
-export type TypedQuestion = Exclude<QuestionType, 'list' | 'blur'>;
+/** Types avec config + solution propres (liste, photo floue et zoom passent par question_answers). */
+export type TypedQuestion = Exclude<QuestionType, 'list' | 'blur' | 'zoom'>;
 
 export const TYPE_LABELS: Record<QuestionType, string> = {
 	list: 'Liste (autocomplétion)',
@@ -35,7 +42,10 @@ export const TYPE_LABELS: Record<QuestionType, string> = {
 	order: "Remettre dans l'ordre",
 	zone: "Zone sur l'image",
 	match: 'Associer',
-	blur: 'Photo qui se dévoile'
+	blur: 'Photo qui se dévoile',
+	zoom: 'Zoom mystère',
+	pin: 'Viser juste',
+	word: 'Mot mystère'
 };
 
 // ---------- Admin : formulaire → config + solution ----------
@@ -64,6 +74,13 @@ export function shuffledOrder(n: number): number[] {
 		[idx[i], idx[j]] = [idx[j], idx[i]];
 	}
 	return idx;
+}
+
+/** Point choisi par l'admin (zoom, viser juste), champs `px` et `py`. */
+export function parsePoint(fd: FormData, what: string): Point {
+	const [x, y] = [num(fd.get('px')), num(fd.get('py'))];
+	if (![x, y].every((v) => v >= 0 && v <= 1)) throw new BadAnswer(`${what} : clique sur l’image pour placer le point.`);
+	return { x, y };
 }
 
 export function parseAdmin(type: TypedQuestion, fd: FormData): { config: object; solution: object } {
@@ -116,6 +133,21 @@ export function parseAdmin(type: TypedQuestion, fd: FormData): { config: object;
 		const pairs = rows.map((_, i) => shown.indexOf(i));
 		return { config: { left, right } satisfies MatchConfig, solution: { pairs } satisfies MatchSolution };
 	}
+	if (type === 'pin') {
+		const p = parsePoint(fd, 'Viser juste');
+		const ratio = num(fd.get('ratio'));
+		if (!(ratio >= 0.05 && ratio <= 20)) throw new BadAnswer('Viser juste : proportions de l’image inconnues, recharge l’image.');
+		return { config: {}, solution: { ...p, ratio } satisfies PinSolution };
+	}
+	if (type === 'word') {
+		const raw = String(fd.get('word') ?? '').trim();
+		// Le joueur ne tape que A à Z : un Œ, un espace ou un tiret dans le mot le rendraient introuvable.
+		if (!/^[a-z]*$/i.test(raw.normalize('NFD').replace(/\p{Diacritic}/gu, '')))
+			throw new BadAnswer('Mot mystère : un seul mot, lettres A à Z (accents acceptés), ni espace, ni tiret, ni chiffre.');
+		const word = normalizeWord(raw);
+		if (word.length < WORD_MIN || word.length > WORD_MAX) throw new BadAnswer(`Mot mystère : entre ${WORD_MIN} et ${WORD_MAX} lettres.`);
+		return { config: { length: word.length } satisfies WordConfig, solution: { word } satisfies WordSolution };
+	}
 	// zone
 	const [x, y, w, h] = ['zx', 'zy', 'zw', 'zh'].map((k) => num(fd.get(k)));
 	const ok = [x, y, w, h].every((v) => v >= 0 && v <= 1) && w >= 0.01 && h >= 0.01 && x + w <= 1.0001 && y + h <= 1.0001;
@@ -162,6 +194,21 @@ export const NUMBER_TIERS: [number, number][] = [
 	[0.25, 0.4]
 ];
 
+/** Paliers de « viser juste » : distance max (part du grand côté de l'image) → part des points. */
+export const PIN_TIERS: [number, number][] = [
+	[0.03, 1],
+	[0.06, 0.7],
+	[0.12, 0.4],
+	[0.2, 0.15]
+];
+
+/** Distance entre deux points en fractions d'image, rapportée au grand côté (une image large n'avantage pas l'axe vertical). */
+export function pinDistance(a: Point, b: Point, ratio: number): number {
+	return Math.hypot(a.x - b.x, (a.y - b.y) * ratio) / Math.max(1, ratio);
+}
+
+export const pinScore = (d: number) => PIN_TIERS.find(([max]) => d <= max)?.[1] ?? 0;
+
 export function numberScore(answer: number, target: number): number {
 	if (target === 0) return answer === 0 ? 1 : 0;
 	const rel = Math.abs(answer - target) / Math.abs(target);
@@ -172,7 +219,7 @@ export function numberScore(answer: number, target: number): number {
  * Lit la réponse du joueur dans le formulaire et la note. Lève BadAnswer si elle est mal formée
  * (on ne compte jamais une réponse illisible comme une mauvaise réponse : le joueur peut corriger).
  */
-export function scoreAnswer(type: TypedQuestion, config: unknown, solution: unknown, fd: FormData): { score: number; value: unknown } {
+export function scoreAnswer(type: TypedQuestion, config: unknown, solution: unknown, fd: FormData): { score: number; value: unknown; correct?: boolean } {
 	if (type === 'choice') {
 		const c = config as ChoiceConfig;
 		const rawChoice = fd.get('choice');
@@ -203,8 +250,23 @@ export function scoreAnswer(type: TypedQuestion, config: unknown, solution: unkn
 		const good = (solution as MatchSolution).pairs.filter((v, i) => pairs[i] === v).length;
 		return { score: good / n, value: { pairs } };
 	}
+	if (type === 'word') {
+		// Les essais viennent de la base (table reveals), jamais du navigateur, sauf en aperçu admin.
+		const word = (solution as WordSolution).word;
+		const guesses = fd.getAll('guess').map((g) => normalizeWord(String(g)));
+		if (guesses.length > WORD_TRIES || guesses.some((g) => g.length !== word.length)) throw new BadAnswer('Essais invalides.');
+		const found = guesses.indexOf(word);
+		if (found >= 0) return { score: WORD_POINTS[found], value: { guesses: guesses.slice(0, found + 1) }, correct: true };
+		if (guesses.length < WORD_TRIES) throw new BadAnswer('Le mot n’est pas encore trouvé : il te reste des essais.');
+		return { score: 0, value: { guesses } };
+	}
 	const [x, y] = [num(fd.get('x')), num(fd.get('y'))];
 	if (![x, y].every((v) => v >= 0 && v <= 1)) throw new BadAnswer('Clique sur l’image.');
+	if (type === 'pin') {
+		const p = solution as PinSolution;
+		const score = pinScore(pinDistance({ x, y }, p, p.ratio));
+		return { score, value: { x, y }, correct: score === 1 };
+	}
 	const z = solution as ZoneSolution;
 	const inside = x >= z.x && x <= z.x + z.w && y >= z.y && y <= z.y + z.h;
 	return { score: inside ? 1 : 0, value: { x, y } };
@@ -214,23 +276,25 @@ export function scoreAnswer(type: TypedQuestion, config: unknown, solution: unkn
 
 const fmtNumber = (n: number, unit: string) => `${n.toLocaleString('fr-FR')}${unit ? ` ${unit}` : ''}`;
 
-/** La réponse d'un joueur, en texte (zone : null, elle se dessine sur l'image). */
+/** La réponse d'un joueur, en texte (zone, viser juste : null, elle se dessine sur l'image). */
 export function answerText(type: TypedQuestion, config: unknown, value: unknown): string | null {
-	const v = value as { choice?: number; value?: number; order?: number[]; pairs?: number[] };
+	const v = value as { choice?: number; value?: number; order?: number[]; pairs?: number[]; guesses?: string[] };
 	if (type === 'choice') return (config as ChoiceConfig).options[v.choice ?? -1] ?? '?';
 	if (type === 'number') return fmtNumber(v.value ?? 0, (config as NumberConfig).unit);
 	if (type === 'order') return (v.order ?? []).map((i) => (config as OrderConfig).items[i]).join(' → ');
 	if (type === 'match') return matchText(config as MatchConfig, v.pairs ?? []);
+	if (type === 'word') return (v.guesses ?? []).join(' · ');
 	return null;
 }
 
 const matchText = (c: MatchConfig, pairs: number[]) => c.left.map((l, i) => `${l} → ${c.right[pairs[i]] ?? '?'}`).join(' · ');
 
-/** La solution, en texte, pour la révélation de fin (zone : null, elle se dessine sur l'image). */
+/** La solution, en texte, pour la révélation de fin (zone, viser juste : null, elle se dessine sur l'image). */
 export function solutionText(type: TypedQuestion, config: unknown, solution: unknown): string | null {
 	if (type === 'choice') return (config as ChoiceConfig).options[(solution as ChoiceSolution).correct];
 	if (type === 'number') return fmtNumber((solution as NumberSolution).value, (config as NumberConfig).unit);
 	if (type === 'order') return (solution as OrderSolution).order.map((i) => (config as OrderConfig).items[i]).join(' → ');
 	if (type === 'match') return matchText(config as MatchConfig, (solution as MatchSolution).pairs);
+	if (type === 'word') return (solution as WordSolution).word;
 	return null;
 }

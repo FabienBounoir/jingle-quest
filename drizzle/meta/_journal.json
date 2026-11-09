@@ -57,6 +57,13 @@
       "when": 1794257210623,
       "tag": "0007_avatar",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794258757999,
+      "tag": "0008_new_types",
+      "breakpoints": true
     }
   ]
 }

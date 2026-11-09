@@ -3,6 +3,8 @@
 	import { page } from '$app/state';
 	import Notice from '$lib/components/Notice.svelte';
 	import ZoneEditor from '$lib/components/ZoneEditor.svelte';
+	import PointEditor from '$lib/components/PointEditor.svelte';
+	import { WORD_MAX, WORD_MIN, WORD_POINTS } from '$lib/word';
 	import { dayLabel } from '$lib/dates';
 	let { data, form } = $props();
 
@@ -13,7 +15,10 @@
 		{ id: 'order', label: 'Ordre', hint: '3 à 5 éléments à remettre dans l’ordre' },
 		{ id: 'zone', label: 'Zone', hint: 'cliquer au bon endroit sur l’image' },
 		{ id: 'match', label: 'Associer', hint: '3 à 5 paires à relier' },
-		{ id: 'blur', label: 'Photo floue', hint: 'une photo pixellisée que le joueur défloute en perdant des points ; réponse dans une liste' }
+		{ id: 'blur', label: 'Photo floue', hint: 'une photo pixellisée que le joueur défloute en perdant des points ; réponse dans une liste' },
+		{ id: 'zoom', label: 'Zoom mystère', hint: 'un détail de la photo en très gros plan, le joueur dézoome en perdant des points ; réponse dans une liste' },
+		{ id: 'pin', label: 'Viser juste', hint: 'cliquer le plus près possible d’un point de l’image (carte, plan…), points selon la distance' },
+		{ id: 'word', label: 'Mot mystère', hint: 'deviner un mot en 6 essais, façon Wordle ; moins de points à chaque essai' }
 	] as const;
 
 	const q = $derived(data.question);
@@ -28,7 +33,7 @@
 
 	// Autres types : état initialisé depuis la config et la solution enregistrées.
 	type Cfg = { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[] };
-	type Sol = { correct?: number; value?: number; order?: number[]; pairs?: number[]; x?: number; y?: number; w?: number; h?: number };
+	type Sol = { correct?: number; value?: number; order?: number[]; pairs?: number[]; x?: number; y?: number; w?: number; h?: number; word?: string };
 	// svelte-ignore state_referenced_locally
 	const cfg0 = (data.question?.config ?? {}) as Cfg;
 	// svelte-ignore state_referenced_locally
@@ -45,16 +50,21 @@
 	// Associer : saisi par paires (gauche → droite), le serveur mélange la colonne de droite.
 	let matchLeft = $state(pad(cfg0.left ?? [], 5));
 	let matchRight = $state(pad(cfg0.left && cfg0.right && sol0.pairs ? cfg0.left.map((_, i) => cfg0.right![sol0.pairs![i]]) : [], 5));
-	let zone = $state(sol0.x !== undefined ? { x: sol0.x, y: sol0.y!, w: sol0.w!, h: sol0.h! } : null);
+	let zone = $state(sol0.x !== undefined && sol0.w !== undefined ? { x: sol0.x, y: sol0.y!, w: sol0.w!, h: sol0.h! } : null);
+	// Zoom (point de départ) et viser juste (cible) : un point sur l'image.
+	let point = $state(sol0.x !== undefined && sol0.w === undefined ? { x: sol0.x, y: sol0.y! } : null);
+	let word = $state(sol0.word ?? '');
 	let newImage = $state<string | null>(null);
 	const imageSrc = $derived(newImage ?? (data.question?.hasImage ? `/img/q/${data.question.id}` : null));
 	function pickImage(e: Event) {
 		const f = (e.currentTarget as HTMLInputElement).files?.[0];
 		if (newImage) URL.revokeObjectURL(newImage);
 		newImage = f ? URL.createObjectURL(f) : null;
-		if (f && type === 'zone') zone = null; // nouvelle image : la zone est à redessiner
+		if (f) [zone, point] = [null, null]; // nouvelle image : la zone ou le point sont à replacer
 	}
-	const listLike = $derived(type === 'list' || type === 'blur');
+	const listLike = $derived(type === 'list' || type === 'blur' || type === 'zoom');
+	const needsImage = $derived(type === 'zone' || type === 'blur' || type === 'zoom' || type === 'pin');
+	const drawnOn = $derived(type === 'zone' || type === 'zoom' || type === 'pin'); // l'image s'affiche dans l'éditeur
 	const canSave = $derived(!listLike || selected.length > 0);
 
 
@@ -120,11 +130,11 @@
 			</label>
 
 			<div class="field">
-				<span>{type === 'zone' || type === 'blur' ? 'l’image (obligatoire)' : 'une image ? (optionnel)'}</span>
+				<span>{needsImage ? 'l’image (obligatoire)' : 'une image ? (optionnel)'}</span>
 				<div class="row">
-					{#if imageSrc && type !== 'zone'}<img src={imageSrc} alt="Visuel actuel de la question" class="thumb" />{/if}
-					<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" onchange={pickImage} disabled={locked && (type === 'zone' || type === 'blur')} />
-					{#if q?.hasImage && type !== 'zone' && type !== 'blur'}<label class="check"><input type="checkbox" name="removeImage" /> retirer l'image</label>{/if}
+					{#if imageSrc && !drawnOn}<img src={imageSrc} alt="Visuel actuel de la question" class="thumb" />{/if}
+					<input type="file" name="image" accept="image/png,image/jpeg,image/webp,image/gif" onchange={pickImage} disabled={locked && needsImage} />
+					{#if q?.hasImage && !needsImage}<label class="check"><input type="checkbox" name="removeImage" /> retirer l'image</label>{/if}
 				</div>
 				<p class="muted">JPG, PNG, WebP ou GIF, 2 Mo maximum. Visible par les joueurs seulement à l'ouverture.</p>
 			</div>
@@ -134,6 +144,13 @@
 					La photo démarre très pixellisée : chaque joueur peut la déflouter lui-même, au prix de points.
 					11 niveaux : les premiers clics coûtent 5 %, puis de plus en plus (100 → 95 → 90 → 85 → 78 → 70 → 60 → 50 → 40 → 30 %), et la photo n'est nette qu'au dernier (20 %).
 				</p>
+			{/if}
+			{#if type === 'zoom'}
+				<div class="field">
+					<span>point de départ du zoom</span>
+					<PointEditor src={imageSrc} bind:point disabled={locked} hint="Clique sur le détail à montrer en très gros plan au départ." />
+					<p class="muted">Le joueur voit d'abord 6 % de l'image autour de ce point, puis dézoome en 11 niveaux (même barème que la photo floue : 100 → … → 20 %, image entière au dernier).</p>
+				</div>
 			{/if}
 			{#if listLike}
 			<div class="field">
@@ -241,6 +258,17 @@
 			{:else if type === 'zone'}
 				<h2 id="ok-title">La bonne zone</h2>
 				<ZoneEditor src={imageSrc} bind:rect={zone} disabled={locked} />
+			{:else if type === 'pin'}
+				<h2 id="ok-title">La cible</h2>
+				<PointEditor src={imageSrc} bind:point disabled={locked} hint="Clique sur l'endroit exact à viser." />
+				<p class="muted">Points selon la distance du clic (en part du grand côté de l'image) : à 3 % = 100 %, à 6 % = 70 %, à 12 % = 40 %, à 20 % = 15 %, au-delà = 0.</p>
+			{:else if type === 'word'}
+				<h2 id="ok-title">Le mot</h2>
+				<label class="field"><span>mot à trouver</span><input type="text" name="word" bind:value={word} minlength={WORD_MIN} maxlength={WORD_MAX} autocomplete="off" placeholder="ex. ATLAS" readonly={locked} /></label>
+				<p class="muted">
+					{WORD_MIN} à {WORD_MAX} lettres, un seul mot (accents ignorés, ni espace ni tiret). Les joueurs ont 6 essais ; trouvé au 1er essai = {WORD_POINTS.map((p) => `${Math.round(p * 100)} %`).join(' → ')} au 6e.
+					La question sert d'indice : « Nom du projet de migration cloud lancé en 2024 ».
+				</p>
 			{/if}
 		</section>
 

@@ -6,8 +6,10 @@
 	import OrderInput from '$lib/components/answers/OrderInput.svelte';
 	import ZoneInput from '$lib/components/answers/ZoneInput.svelte';
 	import MatchInput from '$lib/components/answers/MatchInput.svelte';
+	import WordInput from '$lib/components/answers/WordInput.svelte';
 	import BlurImage from '$lib/components/BlurImage.svelte';
 	import { BLUR_MULTIPLIERS } from '$lib/blur';
+	import { WORD_POINTS } from '$lib/word';
 	import { serverClock } from '$lib/clock.svelte';
 	import { dayLabel } from '$lib/dates';
 	import { live } from '$lib/live.svelte';
@@ -15,12 +17,17 @@
 	let { data, form } = $props();
 	const answered = $derived(live.answered?.questionId === data.question.id ? live.answered.count : data.answered);
 
-	let value = $state<string | null>(null); // types « list » et « blur » : jeton de la valeur choisie
+	let value = $state<string | null>(null); // types « list », « blur », « zoom » : jeton de la valeur choisie
 	let ready = $state(false); // autres types : le composant de saisie dit si la réponse est complète
 	let sending = $state(false);
 	const q = $derived(data.question);
-	const cfg = $derived(q.config as { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[] });
-	const canSubmit = $derived(q.type === 'list' || q.type === 'blur' ? value !== null : ready);
+	const cfg = $derived(q.config as { options?: string[]; unit?: string; items?: string[]; left?: string[]; right?: string[]; length?: number });
+	const listLike = $derived(q.type === 'list' || q.type === 'blur' || q.type === 'zoom');
+	const staged = $derived(q.type === 'blur' || q.type === 'zoom');
+	const onImage = $derived(q.type === 'zone' || q.type === 'pin'); // l'image est le champ de réponse
+	const canSubmit = $derived(listLike ? value !== null : ready);
+	// Mot mystère : essais renvoyés par l'action (aperçu admin : seule source), sinon ceux de la base.
+	const guesses = $derived(form && 'guesses' in form && form.guesses ? form.guesses : data.guesses);
 	const imgSrc = $derived(`/img/q/${q.id}`);
 	const zonePoint = $derived(data.myAnswer?.value as { x: number; y: number } | null | undefined);
 	// Juste = réussi, même avec des points réduits (photo défloutée) ; points partiels = presque.
@@ -31,7 +38,7 @@
 	const clock = serverClock(data.serverNow);
 	const bonusLeft = $derived(data.sameDay ? Math.max(0, data.bonusEndsAt - clock.now) : 0);
 	const bonusNow = $derived(Math.round(data.scoring.bonusMax * (bonusLeft / (data.scoring.bonusMinutes * 60_000))));
-	const blurFactor = $derived(q.type === 'blur' ? BLUR_MULTIPLIERS[blurStage] : 1);
+	const blurFactor = $derived(staged ? BLUR_MULTIPLIERS[blurStage] : q.type === 'word' ? (WORD_POINTS[guesses.length] ?? 0) : 1);
 	const potential = $derived(Math.round(blurFactor * (data.sameDay ? data.scoring.pointsCorrect + bonusNow : data.scoring.pointsCatchup)));
 	const dry = $derived(form && 'result' in form && form.result?.dryRun ? form.result : null);
 	const rank = $derived(form && 'result' in form ? form.result?.rank : null);
@@ -57,23 +64,31 @@
 
 	<section class="card main" aria-labelledby="q">
 		<!-- Zone : l'image EST le champ de réponse (ou le support du résultat), on ne l'affiche pas deux fois. -->
-		{#if q.type === 'blur' && q.hasImage}
-			<BlurImage id={q.id} bind:stage={blurStage} canUnblur={!data.myAnswer && !data.ended} preview={data.preview} />
-		{:else if q.hasImage && q.type !== 'zone'}
+		{#if staged && q.hasImage}
+			<BlurImage id={q.id} bind:stage={blurStage} canUnblur={!data.myAnswer && !data.ended} preview={data.preview} zoom={q.type === 'zoom'} />
+		{:else if q.hasImage && !onImage}
 			<img src={imgSrc} alt="Illustration de la question" class="qimg" />
 		{/if}
 		<h2 id="q">{q.text}</h2>
 
-		{#if q.type === 'zone' && (data.myAnswer || data.ended)}
+		{#if onImage && (data.myAnswer || data.ended)}
 			<div class="zone-view">
 				<img src={imgSrc} alt="Ta réponse sur l’illustration de la question" />
 				{#if data.reveal?.zone}
 					{@const z = data.reveal.zone}
 					<span class="sol" style:left="{z.x * 100}%" style:top="{z.y * 100}%" style:width="{z.w * 100}%" style:height="{z.h * 100}%" aria-hidden="true"></span>
 				{/if}
+				{#if data.reveal?.pin}
+					{@const t = data.reveal.pin}
+					<span class="target" style:left="{t.x * 100}%" style:top="{t.y * 100}%" aria-hidden="true"></span>
+				{/if}
 				{#if zonePoint}<span class="mark" style:left="{zonePoint.x * 100}%" style:top="{zonePoint.y * 100}%" aria-hidden="true"></span>{/if}
 			</div>
-			<p class="muted">{zonePoint ? 'Le rond : ton clic.' : ''}{data.reveal?.zone ? ' Le cadre vert : la bonne zone.' : ''}</p>
+			<p class="muted">{zonePoint ? 'Le rond : ton clic.' : ''}{data.reveal?.zone ? ' Le cadre vert : la bonne zone.' : ''}{data.reveal?.pin ? ' La croix verte : la cible.' : ''}</p>
+		{/if}
+
+		{#if q.type === 'word' && (guesses.length || (!data.myAnswer && !data.ended))}
+			<WordInput length={cfg.length ?? 0} {guesses} canPlay={!data.myAnswer && !data.ended && !(dry && q.type === 'word')} preview={data.preview} />
 		{/if}
 
 		{#if data.myAnswer}
@@ -94,6 +109,16 @@
 			</div>
 		{:else if data.ended}
 			<p class="result ko">Trop tard, l'événement est terminé.</p>
+		{:else if q.type === 'word'}
+			<!-- Chaque essai est son propre envoi (WordInput) : pas de bouton VALIDER. -->
+			{#if error}<p class="notice error" role="alert">{error}</p>{/if}
+			{#if dry}
+				<p class="notice {dry.correct ? 'ok' : 'error'}" role="status">
+					Aperçu : {dry.correct ? 'mot trouvé' : 'mot pas trouvé'}{dry.points ? `, il rapporterait ${dry.points} pts` : ''}. Rien n'est enregistré.
+				</p>
+			{:else}
+				<p class="muted">si tu trouves à cet essai : <strong>{potential} pts</strong>{data.sameDay ? '' : ' (rattrapage)'}</p>
+			{/if}
 		{:else}
 			<form
 				method="POST"
@@ -107,18 +132,18 @@
 					};
 				}}
 			>
-				{#if q.type === 'list' || q.type === 'blur'}
+				{#if listLike}
 					<Combobox items={q.items} bind:value id="answer" label="ta réponse · {q.listName} :" />
 					<input type="hidden" name="itemId" value={value ?? ''} />
 					<!-- Aperçu admin uniquement : le serveur lit sinon le niveau en base. -->
-					{#if q.type === 'blur' && data.preview}<input type="hidden" name="stage" value={blurStage} />{/if}
+					{#if staged && data.preview}<input type="hidden" name="stage" value={blurStage} />{/if}
 				{:else if q.type === 'choice'}
 					<ChoiceInput options={cfg.options ?? []} bind:ready />
 				{:else if q.type === 'number'}
 					<NumberInput unit={cfg.unit ?? ''} bind:ready />
 				{:else if q.type === 'order'}
 					<OrderInput items={cfg.items ?? []} bind:ready />
-				{:else if q.type === 'zone'}
+				{:else if onImage}
 					<ZoneInput src={imgSrc} bind:ready />
 				{:else if q.type === 'match'}
 					<MatchInput left={cfg.left ?? []} right={cfg.right ?? []} bind:ready />
@@ -133,7 +158,7 @@
 
 				<div class="submit">
 					<div class="gain">
-						<span>{q.type === 'number' || q.type === 'order' || q.type === 'match' ? 'jusqu’à' : 'si c’est juste :'} <strong>{potential} pts</strong>{data.sameDay ? '' : ' (rattrapage)'}</span>
+						<span>{q.type === 'number' || q.type === 'order' || q.type === 'match' || q.type === 'pin' ? 'jusqu’à' : 'si c’est juste :'} <strong>{potential} pts</strong>{data.sameDay ? '' : ' (rattrapage)'}</span>
 						{#if bonusLeft > 0}
 							<div class="bar"><div style:width="{(bonusLeft / (data.scoring.bonusMinutes * 60_000)) * 100}%"></div></div>
 						{/if}
@@ -190,6 +215,9 @@
 	.zone-view { position: relative; border: 3.5px solid var(--ink); border-radius: 18px; overflow: hidden; background: var(--white); }
 	.zone-view img { display: block; width: 100%; height: auto; }
 	.sol { position: absolute; border: 4px solid var(--green-dark); background: rgba(127, 209, 166, 0.35); border-radius: 6px; }
+	.target { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; pointer-events: none; }
+	.target::before, .target::after { content: ''; position: absolute; left: 50%; top: 0; width: 7px; height: 100%; margin-left: -3.5px; border-radius: 4px; background: var(--green-dark); box-shadow: 0 0 0 2px var(--white); transform: rotate(45deg); }
+	.target::after { transform: rotate(-45deg); }
 	.mark { position: absolute; width: 30px; height: 30px; margin: -15px 0 0 -15px; border: 4px solid var(--ink); border-radius: 50%; background: rgba(255, 197, 66, 0.6); box-shadow: 0 0 0 3px var(--white); }
 	.muted { margin: 0; }
 	.result .hand { margin: 0; }

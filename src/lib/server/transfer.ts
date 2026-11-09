@@ -6,8 +6,8 @@ import { getSettings, invalidateSettings } from './settings';
 import { isValidTimeZone, localParts, zonedTime } from './tz';
 import { MAX_IMAGE_BYTES, MAX_LABEL, sniffImage } from './upload';
 import { sanitizeImage } from './images';
-import { parseAdmin, type TypedQuestion } from './questionTypes';
-import { LIST_TYPES, QUESTION_TYPES, type QuestionType } from './db/schema';
+import { parseAdmin, parsePoint, type TypedQuestion } from './questionTypes';
+import { IMAGE_TYPES, LIST_TYPES, QUESTION_TYPES, type QuestionType } from './db/schema';
 
 export const FORMAT = 'jingle-quest/1';
 
@@ -96,7 +96,7 @@ export async function exportData(): Promise<ExportFile> {
 /** Reconstruit le formulaire admin d'une question typée à partir de l'export, pour la revalider. */
 function typedForm(type: TypedQuestion, config: unknown, solution: unknown): FormData {
 	const c = (config ?? {}) as { options?: unknown[]; unit?: unknown; items?: unknown[]; left?: unknown[]; right?: unknown[] };
-	const sol = (solution ?? {}) as { correct?: unknown; value?: unknown; order?: unknown[]; pairs?: unknown[]; x?: unknown; y?: unknown; w?: unknown; h?: unknown };
+	const sol = (solution ?? {}) as { correct?: unknown; value?: unknown; order?: unknown[]; pairs?: unknown[]; x?: unknown; y?: unknown; w?: unknown; h?: unknown; ratio?: unknown; word?: unknown };
 	const fd = new FormData();
 	const add = (k: string, v: unknown) => fd.append(k, String(v ?? ''));
 	if (type === 'choice') {
@@ -112,6 +112,12 @@ function typedForm(type: TypedQuestion, config: unknown, solution: unknown): For
 			add('left', l);
 			add('right', (c.right ?? [])[Number((sol.pairs ?? [])[i])]);
 		});
+	} else if (type === 'pin') {
+		add('px', sol.x);
+		add('py', sol.y);
+		add('ratio', sol.ratio);
+	} else if (type === 'word') {
+		add('word', sol.word);
 	} else {
 		add('zx', sol.x);
 		add('zy', sol.y);
@@ -188,15 +194,26 @@ export function parseExport(raw: unknown) {
 		if (q.day !== null && (!dates.has(q.day) || usedDays.has(q.day))) throw new ImportError(`${where} : jour ${q.day} inconnu ou déjà pris.`);
 		if (q.day) usedDays.add(q.day);
 		const img = image(q.image, where);
+		if (IMAGE_TYPES.includes(type) && !img) throw new ImportError(`${where} : ce type de question a besoin de son image.`);
 		if (LIST_TYPES.includes(type)) {
-			if (type === 'blur' && !img) throw new ImportError(`${where} : une photo qui se dévoile a besoin de son image.`);
 			const items = q.list ? lists.get(q.list) : undefined;
 			if (!items) throw new ImportError(`${where} : liste « ${q.list} » absente du fichier.`);
 			if (!Array.isArray(q.correct) || q.correct.length === 0 || !q.correct.every((c) => items.has(c)))
 				throw new ImportError(`${where} : bonnes réponses absentes de la liste « ${q.list} ».`);
-			return { type, text: q.text, list: q.list, correct: q.correct, config: {}, solution: {}, day: q.day, image: img };
+			let solution = {};
+			if (type === 'zoom') {
+				const p = (q.solution ?? {}) as { x?: unknown; y?: unknown };
+				const fd = new FormData();
+				fd.append('px', String(p.x ?? ''));
+				fd.append('py', String(p.y ?? ''));
+				try {
+					solution = parsePoint(fd, 'Zoom');
+				} catch (e) {
+					throw new ImportError(`${where} : ${e instanceof Error ? e.message : 'point invalide'}`);
+				}
+			}
+			return { type, text: q.text, list: q.list, correct: q.correct, config: {}, solution, day: q.day, image: img };
 		}
-		if (type === 'zone' && !img) throw new ImportError(`${where} : une zone a besoin de son image.`);
 		// On repasse par la validation du formulaire admin : un fichier ne peut rien introduire qu'un
 		// admin n'aurait pas pu saisir (l'ordre est remélangé au passage).
 		try {

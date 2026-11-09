@@ -1,7 +1,8 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { bonusAt, endOf, isSameDay } from '$lib/server/game';
-import { answeredCount, getDay, getDays, getQuestion, getStandings, myAnswerText, reveal, revealStage, submitAnswer, unblur, userAnswers } from '$lib/server/play';
+import { answeredCount, getDay, getDays, getQuestion, getStandings, guessWord, myAnswerText, reveal, revealStage, submitAnswer, unblur, userAnswers, wordGuesses } from '$lib/server/play';
+import { STAGED_TYPES } from '$lib/server/db';
 import { getSettings } from '$lib/server/settings';
 
 export const load: PageServerLoad = async ({ params, locals }) => {
@@ -34,8 +35,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			items: a || ended ? [] : q.items
 		},
 		myAnswer: a ? { text: await myAnswerText(q, a), value: a.value, score: a.score, isCorrect: a.isCorrect, points: a.points } : null,
-		// Photo floue : niveau de défloutage déjà atteint par ce joueur (0 en aperçu admin).
-		blurStage: q.type === 'blur' && !preview ? await revealStage(locals.user!.id, q.id) : 0,
+		// Photo floue, zoom : niveau déjà atteint par ce joueur (0 en aperçu admin).
+		blurStage: STAGED_TYPES.includes(q.type) && !preview ? await revealStage(locals.user!.id, q.id) : 0,
+		// Mot mystère : essais déjà joués, avec leurs indices (aperçu admin : rien d'enregistré).
+		guesses: q.type === 'word' && !preview ? await wordGuesses(locals.user!.id, q.id) : [],
 		// La bonne réponse ne quitte le serveur qu'une fois l'événement terminé (SPECS §5.4).
 		reveal: ended ? await reveal(day.questionId) : null,
 		ended,
@@ -59,6 +62,21 @@ export const actions: Actions = {
 		if (!res.ok) return fail(res.status, { error: res.error });
 		const me = dryRun ? undefined : (await getStandings()).find((x) => x.userId === locals.user!.id);
 		return { result: { score: res.score, correct: res.correct, points: res.points, dryRun: res.dryRun, rank: me?.rank ?? null } };
+	},
+
+	guess: async ({ request, params, locals }) => {
+		const fd = await request.formData();
+		const day = await getDay(params.date);
+		const dryRun = locals.isAdmin && !!day && day.opensAt > new Date();
+		const res = await guessWord(locals.user!, params.date, fd, { dryRun });
+		if (!res.ok) return fail(res.status, { error: res.error });
+		const a = res.answer;
+		if (a && !a.ok) return fail(a.status, { error: a.error });
+		const me = a && !dryRun ? (await getStandings()).find((x) => x.userId === locals.user!.id) : undefined;
+		return {
+			guesses: res.guesses,
+			result: a?.ok ? { score: a.score, correct: a.correct, points: a.points, dryRun: a.dryRun, rank: me?.rank ?? null } : undefined
+		};
 	},
 
 	unblur: async ({ params, locals }) => {
